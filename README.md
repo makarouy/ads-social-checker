@@ -1,4 +1,4 @@
-# Social Link Tracker 🚀
+# Ads Social Checker 🚀
 
 A production-ready Telegram Bot that monitors Facebook, Instagram, TikTok, and YouTube URLs and notifies Telegram users when their status changes.
 

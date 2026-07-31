@@ -14,7 +14,7 @@ const isValidUrl = (string) => {
 export const setupCommands = (bot) => {
   bot.command("start", (ctx) => {
     ctx.reply(
-      "Welcome to Social Link Tracker! 🚀\n\n" +
+      "Welcome to Ads Social Checker! 🚀\n\n" +
         "I can monitor Facebook, Instagram, TikTok, and YouTube URLs and notify you when their status changes.\n\n" +
         "Use /help to see all available commands."
     );

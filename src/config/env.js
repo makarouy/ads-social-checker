@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { cleanEnv, str, port, num } from "envalid"; // We could use envalid or just basic checks, I'll use basic for no extra deps or just simple throws.
+
 
 dotenv.config();
 

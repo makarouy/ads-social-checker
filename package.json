@@ -1,0 +1,33 @@
+{
+  "name": "social-link-tracker",
+  "version": "1.0.0",
+  "description": "Telegram Bot to monitor social media links status",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.44.1",
+    "telegraf": "^4.16.3",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.4.0",
+    "prettier": "^3.3.0",
+    "prisma": "^5.14.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

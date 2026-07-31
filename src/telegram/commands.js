@@ -87,9 +87,14 @@ export const setupCommands = (bot) => {
       };
 
       if (photoUrl) {
-        ctx.replyWithPhoto(photoUrl, { caption, ...replyMarkup });
+        try {
+          await ctx.replyWithPhoto(photoUrl, { caption, ...replyMarkup });
+        } catch (photoError) {
+          logger.error(`Failed to send photo: ${photoError.message}`);
+          await ctx.reply(caption, replyMarkup);
+        }
       } else {
-        ctx.reply(caption, replyMarkup);
+        await ctx.reply(caption, replyMarkup);
       }
     } catch (error) {
       logger.error(`Error in /add: ${error.message}`);
@@ -219,9 +224,14 @@ export const setupCommands = (bot) => {
         if (photoChanged) message += `*New Photo Detected!* 📸\n`;
 
         if (photoChanged && newPhotoUrl) {
-          ctx.replyWithPhoto(newPhotoUrl, { caption: message, parse_mode: "Markdown" });
+          try {
+            await ctx.replyWithPhoto(newPhotoUrl, { caption: message, parse_mode: "Markdown" });
+          } catch (photoError) {
+            logger.error(`Failed to send photo: ${photoError.message}`);
+            await ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
+          }
         } else {
-          ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
+          await ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
         }
       } else {
         await prisma.link.update({

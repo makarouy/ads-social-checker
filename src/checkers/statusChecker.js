@@ -92,10 +92,17 @@ export const runGlobalCheck = async (bot) => {
         
         try {
           if (photoChanged && newPhotoUrl) {
-            await bot.telegram.sendPhoto(link.user.telegramId, newPhotoUrl, {
-              caption: message,
-              parse_mode: "Markdown",
-            });
+            try {
+              await bot.telegram.sendPhoto(link.user.telegramId, newPhotoUrl, {
+                caption: message,
+                parse_mode: "Markdown",
+              });
+            } catch (photoError) {
+              logger.error(`Global check: Failed to send photo: ${photoError.message}`);
+              await bot.telegram.sendMessage(link.user.telegramId, message, {
+                parse_mode: "Markdown",
+              });
+            }
           } else {
             await bot.telegram.sendMessage(link.user.telegramId, message, {
               parse_mode: "Markdown",

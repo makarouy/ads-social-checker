@@ -73,7 +73,13 @@ export const setupCommands = (bot) => {
         },
       });
 
-      ctx.reply(`Link added successfully.\nPlatform: ${platform}\nCurrent Status: ${currentStatus}`);
+      ctx.reply(`Link added successfully.\nPlatform: ${platform}`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: `Current Status: ${currentStatus}`, callback_data: "status_btn_ignore" }]
+          ]
+        }
+      });
     } catch (error) {
       logger.error(`Error in /add: ${error.message}`);
       ctx.reply("An error occurred while adding the link.");

@@ -61,25 +61,36 @@ export const setupCommands = (bot) => {
       }
 
       ctx.reply("Checking URL status before adding...");
-      const currentStatus = await checkLinkStatus(platform, url);
+      const { status: currentStatus, name, photoUrl } = await checkLinkStatus(platform, url);
 
       await prisma.link.create({
         data: {
           userId: ctx.dbUser.id,
           platform,
           url,
+          name,
+          photoUrl,
           currentStatus,
           lastChecked: new Date(),
         },
       });
 
-      ctx.reply(`Link added successfully.\nPlatform: ${platform}`, {
+      let caption = `Link added successfully.\nPlatform: ${platform}`;
+      if (name) caption += `\nName: ${name}`;
+
+      const replyMarkup = {
         reply_markup: {
           inline_keyboard: [
             [{ text: `Current Status: ${currentStatus}`, callback_data: "status_btn_ignore" }]
           ]
         }
-      });
+      };
+
+      if (photoUrl) {
+        ctx.replyWithPhoto(photoUrl, { caption, ...replyMarkup });
+      } else {
+        ctx.reply(caption, replyMarkup);
+      }
     } catch (error) {
       logger.error(`Error in /add: ${error.message}`);
       ctx.reply("An error occurred while adding the link.");
@@ -178,34 +189,49 @@ export const setupCommands = (bot) => {
       }
 
       ctx.reply("Checking now...");
-      const newStatus = await checkLinkStatus(link.platform, link.url);
+      const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
       const now = new Date();
 
-      if (newStatus !== link.currentStatus && newStatus !== "UNKNOWN") {
-        await prisma.history.create({
-          data: { linkId: link.id, status: newStatus },
-        });
+      let statusChanged = newStatus !== link.currentStatus && newStatus !== "UNKNOWN";
+      let nameChanged = newName && newName !== link.name;
+      let photoChanged = newPhotoUrl && newPhotoUrl !== link.photoUrl;
+
+      if (statusChanged || nameChanged || photoChanged) {
+        if (statusChanged) {
+          await prisma.history.create({
+            data: { linkId: link.id, status: newStatus },
+          });
+        }
 
         await prisma.link.update({
           where: { id: link.id },
           data: {
-            lastStatus: link.currentStatus,
-            currentStatus: newStatus,
+            ...(statusChanged && { lastStatus: link.currentStatus, currentStatus: newStatus, lastChanged: now }),
+            ...(nameChanged && { name: newName }),
+            ...(photoChanged && { photoUrl: newPhotoUrl }),
             lastChecked: now,
-            lastChanged: now,
           },
         });
 
-        ctx.reply(
-          `🚨 *Status Changed*\n\n*Platform:* ${link.platform}\n*Old Status:* ${link.currentStatus}\n*New Status:* ${newStatus}\n*URL:* ${link.url}`,
-          { parse_mode: "Markdown", disable_web_page_preview: true }
-        );
+        let message = `🚨 *Update Detected (Manual Check)*\n\n*Platform:* ${link.platform}\n*URL:* ${link.url}\n`;
+        if (statusChanged) message += `*Old Status:* ${link.currentStatus}\n*New Status:* ${newStatus}\n`;
+        if (nameChanged) message += `*New Name:* ${newName}\n`;
+        if (photoChanged) message += `*New Photo Detected!* 📸\n`;
+
+        if (photoChanged && newPhotoUrl) {
+          ctx.replyWithPhoto(newPhotoUrl, { caption: message, parse_mode: "Markdown" });
+        } else {
+          ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
+        }
       } else {
         await prisma.link.update({
           where: { id: link.id },
           data: { lastChecked: now },
         });
-        ctx.reply(`Status unchanged: ${newStatus}`);
+        
+        let msg = `Status unchanged: ${newStatus}`;
+        if (link.name) msg += `\nName: ${link.name}`;
+        ctx.reply(msg);
       }
     } catch (error) {
       logger.error(`Error in /check: ${error.message}`);

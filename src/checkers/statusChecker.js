@@ -18,18 +18,28 @@ export const detectPlatform = (url) => {
 };
 
 export const checkLinkStatus = async (platform, url) => {
+  let result;
   switch (platform) {
     case "Facebook":
-      return await checkFacebookStatus(url);
+      result = await checkFacebookStatus(url);
+      break;
     case "Instagram":
-      return await checkInstagramStatus(url);
+      result = await checkInstagramStatus(url);
+      break;
     case "TikTok":
-      return await checkTikTokStatus(url);
+      result = await checkTikTokStatus(url);
+      break;
     case "YouTube":
-      return await checkYouTubeStatus(url);
+      result = await checkYouTubeStatus(url);
+      break;
     default:
-      return "UNKNOWN";
+      result = "UNKNOWN";
   }
+  
+  if (typeof result === "string") {
+    return { status: result, name: null, photoUrl: null };
+  }
+  return result;
 };
 
 export const runGlobalCheck = async (bot) => {
@@ -40,40 +50,57 @@ export const runGlobalCheck = async (bot) => {
     });
 
     for (const link of links) {
-      const newStatus = await checkLinkStatus(link.platform, link.url);
+      const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
       const now = new Date();
 
-      if (newStatus !== link.currentStatus && newStatus !== "UNKNOWN") {
+      let statusChanged = newStatus !== link.currentStatus && newStatus !== "UNKNOWN";
+      let nameChanged = newName && newName !== link.name;
+      let photoChanged = newPhotoUrl && newPhotoUrl !== link.photoUrl;
+
+      if (statusChanged || nameChanged || photoChanged) {
         logger.info(
-          `Status changed for ${link.url}: ${link.currentStatus} -> ${newStatus}`
+          `Updates detected for ${link.url}: Status(${link.currentStatus}->${newStatus}), Name(${link.name}->${newName})`
         );
 
-        // Save history
-        await prisma.history.create({
-          data: {
-            linkId: link.id,
-            status: newStatus,
-          },
-        });
+        if (statusChanged) {
+          // Save history
+          await prisma.history.create({
+            data: {
+              linkId: link.id,
+              status: newStatus,
+            },
+          });
+        }
 
         // Update Link
         await prisma.link.update({
           where: { id: link.id },
           data: {
-            lastStatus: link.currentStatus,
-            currentStatus: newStatus,
+            ...(statusChanged && { lastStatus: link.currentStatus, currentStatus: newStatus, lastChanged: now }),
+            ...(nameChanged && { name: newName }),
+            ...(photoChanged && { photoUrl: newPhotoUrl }),
             lastChecked: now,
-            lastChanged: now,
           },
         });
 
         // Notify user
-        const message = `🚨 *Status Changed*\n\n*Platform:* ${link.platform}\n*Old Status:* ${link.currentStatus}\n*New Status:* ${newStatus}\n*URL:* ${link.url}\n*Time:* ${now.toISOString().replace('T', ' ').substring(0, 16)}`;
+        let message = `🚨 *Update Detected*\n\n*Platform:* ${link.platform}\n*URL:* ${link.url}\n`;
+        if (statusChanged) message += `*Old Status:* ${link.currentStatus}\n*New Status:* ${newStatus}\n`;
+        if (nameChanged) message += `*Name updated:* ${newName}\n`;
+        if (photoChanged) message += `*New Photo Detected!* 📸\n`;
+        message += `\n*Time:* ${now.toISOString().replace('T', ' ').substring(0, 16)}`;
         
         try {
-          await bot.telegram.sendMessage(link.user.telegramId, message, {
-            parse_mode: "Markdown",
-          });
+          if (photoChanged && newPhotoUrl) {
+            await bot.telegram.sendPhoto(link.user.telegramId, newPhotoUrl, {
+              caption: message,
+              parse_mode: "Markdown",
+            });
+          } else {
+            await bot.telegram.sendMessage(link.user.telegramId, message, {
+              parse_mode: "Markdown",
+            });
+          }
           
           await prisma.notification.create({
             data: {

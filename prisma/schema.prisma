@@ -30,6 +30,8 @@ model Link {
   userId       Int
   platform     String
   url          String
+  name         String?
+  photoUrl     String?
   username     String?
   currentStatus String   @default("UNKNOWN")
   lastStatus   String?

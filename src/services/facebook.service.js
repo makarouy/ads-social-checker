@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as cheerio from "cheerio";
 import { logger } from "../utils/logger.js";
 
 export const checkFacebookStatus = async (url) => {
@@ -16,33 +17,47 @@ export const checkFacebookStatus = async (url) => {
     const { status, data } = response;
     const lowerData = typeof data === "string" ? data.toLowerCase() : "";
 
+    let name = null;
+    let photoUrl = null;
+
+    if (typeof data === "string") {
+      const $ = cheerio.load(data);
+      name = $('meta[property="og:title"]').attr("content") || null;
+      photoUrl = $('meta[property="og:image"]').attr("content") || null;
+      
+      // Clean up common " | Facebook" trailing text in name
+      if (name && name.endsWith(" | Facebook")) {
+        name = name.replace(" | Facebook", "");
+      }
+    }
+
     if (status === 200) {
       if (
         lowerData.includes("you must log in to continue") ||
         lowerData.includes("login_required")
       ) {
-        return "LOGIN_REQUIRED";
+        return { status: "LOGIN_REQUIRED", name, photoUrl };
       }
       if (
         lowerData.includes("this content isn't available right now") ||
         lowerData.includes("page not found")
       ) {
-        return "NOT_FOUND";
+        return { status: "NOT_FOUND", name, photoUrl };
       }
-      return "LIVE";
+      return { status: "LIVE", name, photoUrl };
     }
 
     if (status === 404) {
-      return "NOT_FOUND";
+      return { status: "NOT_FOUND", name, photoUrl };
     }
 
     if (status === 429) {
-      return "RATE_LIMITED";
+      return { status: "RATE_LIMITED", name, photoUrl };
     }
 
-    return "UNKNOWN";
+    return { status: "UNKNOWN", name, photoUrl };
   } catch (error) {
     logger.error(`Facebook check error for ${url}: ${error.message}`);
-    return "UNKNOWN";
+    return { status: "UNKNOWN", name: null, photoUrl: null };
   }
 };

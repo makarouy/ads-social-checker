@@ -87,8 +87,58 @@ const handleAddLink = async (ctx, text) => {
 
 const mainMenu = Markup.keyboard([
   ['📊 Status', '📋 My Links'],
-  ['➕ Add Link', '🗑️ Remove Link']
+  ['➕ Add Link']
 ]).resize();
+
+const generateDashboardList = async (userId) => {
+  const links = await prisma.link.findMany({
+    where: { userId },
+  });
+
+  if (links.length === 0) {
+    return { text: "📭 <b>You are not tracking any links yet.</b> Paste a link to get started!", markup: null };
+  }
+
+  const buttons = links.map((link) => {
+    let label = `${getStatusEmoji(link.currentStatus).split(' ')[0]} [${link.platform}] `;
+    if (link.name) {
+      label += link.name.length > 20 ? link.name.substring(0, 20) + "..." : link.name;
+    } else {
+      label += link.url.length > 25 ? link.url.substring(0, 25) + "..." : link.url;
+    }
+    return [Markup.button.callback(label, `view_link_${link.id}`)];
+  });
+
+  return {
+    text: `<b>📋 MASTER LINK DASHBOARD</b>\n${DIVIDER}\n<i>Select a link to manage it:</i>`,
+    markup: Markup.inlineKeyboard(buttons)
+  };
+};
+
+const generateControlPanel = async (linkId, userId) => {
+  const link = await prisma.link.findFirst({
+    where: { id: linkId, userId: userId },
+  });
+
+  if (!link) return null;
+
+  let message = `<b>⚙️ LINK CONTROL PANEL</b>\n${DIVIDER}\n`;
+  message += `<b>Platform:</b> ${link.platform}\n`;
+  message += `<b>Account:</b> ${link.name || "N/A"}\n\n`;
+  message += `<b>Status:</b> ${getStatusEmoji(link.currentStatus)}\n`;
+  message += `<b>Last Checked:</b> ${formatCambodiaTime(link.lastChecked)}\n`;
+  message += `${DIVIDER}\n`;
+  message += `<a href="${link.url}">🔗 Open Profile</a>`;
+
+  const markup = Markup.inlineKeyboard([
+    [Markup.button.callback("🔍 Force Check Now", `check_link_${link.id}`)],
+    [Markup.button.callback("🕒 View History", `history_link_${link.id}`)],
+    [Markup.button.callback("🗑️ Remove Link", `remove_link_${link.id}`)],
+    [Markup.button.callback("🔙 Back to List", "dashboard_list")]
+  ]);
+
+  return { text: message, markup };
+};
 
 export const setupCommands = (bot) => {
   bot.command("start", (ctx) => {
@@ -112,41 +162,141 @@ export const setupCommands = (bot) => {
     });
   });
 
-  const handleRemoveMenu = async (ctx) => {
+  const sendDashboard = async (ctx) => {
     try {
-      const links = await prisma.link.findMany({
-        where: { userId: ctx.dbUser.id },
-      });
-
-      if (links.length === 0) {
-        return ctx.reply("📭 <b>You don't have any links to remove.</b>", { parse_mode: "HTML", ...mainMenu });
+      const { text, markup } = await generateDashboardList(ctx.dbUser.id);
+      if (!markup) {
+        return ctx.reply(text, { parse_mode: "HTML", ...mainMenu });
       }
-
-      const buttons = links.map((link) => {
-        let label = `❌ [${link.platform}] `;
-        if (link.name) {
-          label += link.name.length > 20 ? link.name.substring(0, 20) + "..." : link.name;
-        } else {
-          label += link.url.length > 25 ? link.url.substring(0, 25) + "..." : link.url;
-        }
-        return [Markup.button.callback(label, `remove_${link.id}`)];
-      });
-
-      buttons.push([Markup.button.callback("🚫 Cancel", "cancel_remove")]);
-
-      ctx.reply("🗑️ <b>Select a link to remove:</b>", {
-        parse_mode: "HTML",
-        ...Markup.inlineKeyboard(buttons)
-      });
+      ctx.reply(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
     } catch (error) {
-      logger.error(`Error generating remove menu: ${error.message}`);
-      ctx.reply("❌ An error occurred while fetching your links.");
+      logger.error(`Error in sendDashboard: ${error.message}`);
+      ctx.reply("❌ An error occurred while fetching your dashboard.", { parse_mode: "HTML" });
     }
   };
 
-  bot.hears('🗑️ Remove Link', handleRemoveMenu);
+  bot.hears('📋 My Links', sendDashboard);
+  bot.command("list", sendDashboard);
 
-  bot.action(/^remove_(.+)$/, async (ctx) => {
+  bot.action("dashboard_list", async (ctx) => {
+    try {
+      const { text, markup } = await generateDashboardList(ctx.dbUser.id);
+      if (!markup) {
+        return ctx.editMessageText(text, { parse_mode: "HTML" });
+      }
+      ctx.editMessageText(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      ctx.answerCbQuery();
+    } catch (error) {
+      logger.error(`Error in dashboard_list: ${error.message}`);
+      ctx.answerCbQuery("Error loading dashboard.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^view_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    try {
+      const panel = await generateControlPanel(linkId, ctx.dbUser.id);
+      if (!panel) {
+        ctx.answerCbQuery("Link not found.");
+        return ctx.editMessageText("❌ <b>This link has been removed or does not exist.</b>", { parse_mode: "HTML" });
+      }
+      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      ctx.answerCbQuery();
+    } catch (error) {
+      logger.error(`Error in view_link: ${error.message}`);
+      ctx.answerCbQuery("Error loading control panel.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^check_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    try {
+      const link = await prisma.link.findFirst({
+        where: { id: linkId, userId: ctx.dbUser.id },
+      });
+
+      if (!link) {
+        ctx.answerCbQuery("Link not found.");
+        return ctx.editMessageText("❌ <b>Link not found.</b>", { parse_mode: "HTML" });
+      }
+
+      await ctx.answerCbQuery("🔍 Running manual check... Please wait.");
+      
+      const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
+      const now = new Date();
+
+      let statusChanged = newStatus !== link.currentStatus && newStatus !== "UNKNOWN";
+      let nameChanged = newName && newName !== link.name;
+      let photoChanged = newPhotoUrl && newPhotoUrl !== link.photoUrl;
+
+      if (statusChanged || nameChanged || photoChanged) {
+        if (statusChanged) {
+          await prisma.history.create({ data: { linkId: link.id, status: newStatus } });
+        }
+        await prisma.link.update({
+          where: { id: link.id },
+          data: {
+            ...(statusChanged && { lastStatus: link.currentStatus, currentStatus: newStatus, lastChanged: now }),
+            ...(nameChanged && { name: newName }),
+            ...(photoChanged && { photoUrl: newPhotoUrl }),
+            lastChecked: now,
+          },
+        });
+      } else {
+        await prisma.link.update({
+          where: { id: link.id },
+          data: { lastChecked: now },
+        });
+      }
+
+      // Re-generate the panel with updated data
+      const panel = await generateControlPanel(linkId, ctx.dbUser.id);
+      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      
+    } catch (error) {
+      logger.error(`Error in check_link: ${error.message}`);
+      ctx.answerCbQuery("❌ Error during manual check.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^history_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    try {
+      const link = await prisma.link.findFirst({
+        where: { id: linkId, userId: ctx.dbUser.id },
+        include: { histories: { orderBy: { checkedAt: 'desc' }, take: 10 } }
+      });
+
+      if (!link) {
+        return ctx.editMessageText("❌ <b>Link not found.</b>", { parse_mode: "HTML" });
+      }
+
+      let message = `<b>🕒 STATUS HISTORY</b>\n${DIVIDER}\n`;
+      message += `<b>Platform:</b> ${link.platform}\n\n`;
+      
+      if (link.histories.length === 0) {
+        message += `<i>No history available yet.</i>\n`;
+      } else {
+        link.histories.forEach((h) => {
+          message += `• ${getStatusEmoji(h.status)} - ${formatCambodiaTime(h.checkedAt)}\n`;
+        });
+      }
+      message += `\n${DIVIDER}\n`;
+
+      const markup = Markup.inlineKeyboard([
+        [Markup.button.callback("🔙 Back to Control Panel", `view_link_${link.id}`)],
+        [Markup.button.callback("📋 Back to Master List", "dashboard_list")]
+      ]);
+
+      ctx.editMessageText(message, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      ctx.answerCbQuery();
+    } catch (error) {
+      logger.error(`Error in history_link: ${error.message}`);
+      ctx.answerCbQuery("❌ Error fetching history.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^remove_link_(.+)$/, async (ctx) => {
     const linkId = ctx.match[1];
     try {
       const link = await prisma.link.findFirst({
@@ -155,7 +305,7 @@ export const setupCommands = (bot) => {
 
       if (!link) {
         await ctx.answerCbQuery("Link not found.");
-        return ctx.editMessageText("❌ This link has already been removed or does not exist.", { parse_mode: "HTML" });
+        return ctx.editMessageText("❌ <b>This link has already been removed.</b>", { parse_mode: "HTML" });
       }
 
       await prisma.link.delete({
@@ -163,40 +313,17 @@ export const setupCommands = (bot) => {
       });
 
       await ctx.answerCbQuery("Link removed!");
-      ctx.editMessageText(`✅ <b>Successfully removed:</b>\n${link.url}`, { parse_mode: "HTML" });
+      
+      const markup = Markup.inlineKeyboard([
+        [Markup.button.callback("🔙 Back to Master List", "dashboard_list")]
+      ]);
+      
+      ctx.editMessageText(`✅ <b>Successfully removed:</b>\n${link.url}`, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
     } catch (error) {
       logger.error(`Error deleting link via button: ${error.message}`);
       ctx.answerCbQuery("Error removing link.", { show_alert: true });
     }
   });
-
-  bot.action("cancel_remove", (ctx) => {
-    ctx.answerCbQuery();
-    ctx.editMessageText("🚫 <i>Removal canceled.</i>", { parse_mode: "HTML" });
-  });
-
-  const sendList = async (ctx) => {
-    try {
-      const links = await prisma.link.findMany({
-        where: { userId: ctx.dbUser.id },
-      });
-
-      if (links.length === 0) {
-        return ctx.reply("📭 <b>You are not tracking any links yet.</b> Paste a link to get started!", { parse_mode: "HTML", ...mainMenu });
-      }
-
-      let message = `<b>📋 YOUR MONITORED LINKS</b>\n${DIVIDER}\n`;
-      links.forEach((link, idx) => {
-        message += `<b>${idx + 1}.</b> [${link.platform}] <a href="${link.url}">Profile Link</a>\n`;
-      });
-      message += `${DIVIDER}`;
-
-      ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true, ...mainMenu });
-    } catch (error) {
-      logger.error(`Error in list: ${error.message}`);
-      ctx.reply("❌ An error occurred while fetching your links.");
-    }
-  };
 
   const sendStatus = async (ctx) => {
     try {
@@ -225,200 +352,28 @@ export const setupCommands = (bot) => {
     }
   };
 
-  bot.hears('📋 My Links', sendList);
-  bot.command("list", sendList);
-
   bot.hears('📊 Status', sendStatus);
   bot.command("status", sendStatus);
 
   bot.command("help", (ctx) => {
     ctx.reply(
-      `<b>🛠️ AVAILABLE COMMANDS</b>\n${DIVIDER}\n` +
-        "🔹 /add <code>&lt;url&gt;</code> - Monitor a new link\n" +
-        "🔹 /remove - Stop monitoring a link\n" +
-        "🔹 /list - View all your tracked links\n" +
-        "🔹 /status - Check the live status of your links\n" +
-        "🔹 /history <code>&lt;url&gt;</code> - View the status history of a link\n" +
-        "🔹 /check <code>&lt;url&gt;</code> - Force a manual status check right now\n\n" +
-        "<i>(You can also just use the menu buttons!)</i>",
+      `<b>🛠️ HOW TO USE</b>\n${DIVIDER}\n` +
+        "Simply paste a social media link into this chat and the bot will immediately start monitoring it.\n\n" +
+        "Use the buttons on your keyboard to navigate the dashboard. Tap <b>📋 My Links</b> to view, check, and manage your profiles.",
       { parse_mode: "HTML", ...mainMenu }
     );
   });
 
-  bot.command("add", async (ctx) => {
-    const text = ctx.message.text.trim();
-    const parts = text.split(" ");
-    if (parts.length < 2) {
-      return ctx.reply("⚠️ <b>Please provide a URL.</b>\nUsage: <code>/add &lt;url&gt;</code>", { parse_mode: "HTML" });
-    }
-    await handleAddLink(ctx, parts[1]);
-  });
-
-  bot.command("remove", async (ctx) => {
-    const text = ctx.message.text.trim();
-    const parts = text.split(" ");
-    if (parts.length < 2) {
-      return handleRemoveMenu(ctx);
-    }
-
-    const url = parts[1];
-    try {
-      const link = await prisma.link.findFirst({
-        where: { userId: ctx.dbUser.id, url: url },
-      });
-
-      if (!link) {
-        return ctx.reply("❌ <b>Link not found</b> in your tracking list.", { parse_mode: "HTML" });
-      }
-
-      await prisma.link.delete({
-        where: { id: link.id },
-      });
-
-      ctx.reply("🗑️ <b>Link removed successfully.</b>", { parse_mode: "HTML" });
-    } catch (error) {
-      logger.error(`Error in /remove: ${error.message}`);
-      ctx.reply("❌ An error occurred while removing the link.");
-    }
-  });
-
-  bot.command("check", async (ctx) => {
-    const text = ctx.message.text.trim();
-    const parts = text.split(" ");
-    if (parts.length < 2) {
-      return ctx.reply("⚠️ <b>Please provide a URL.</b>\nUsage: <code>/check &lt;url&gt;</code>", { parse_mode: "HTML" });
-    }
-
-    const url = parts[1];
-    try {
-      const link = await prisma.link.findFirst({
-        where: { userId: ctx.dbUser.id, url: url },
-      });
-
-      if (!link) {
-        return ctx.reply("❌ <b>Link not found.</b> Please add it first.", { parse_mode: "HTML" });
-      }
-
-      const waitMsg = await ctx.reply("🔍 <i>Running manual check...</i>", { parse_mode: "HTML" });
-      const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
-      const now = new Date();
-
-      let statusChanged = newStatus !== link.currentStatus && newStatus !== "UNKNOWN";
-      let nameChanged = newName && newName !== link.name;
-      let photoChanged = newPhotoUrl && newPhotoUrl !== link.photoUrl;
-
-      try {
-        await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id);
-      } catch (e) {}
-
-      if (statusChanged || nameChanged || photoChanged) {
-        if (statusChanged) {
-          await prisma.history.create({
-            data: { linkId: link.id, status: newStatus },
-          });
-        }
-
-        await prisma.link.update({
-          where: { id: link.id },
-          data: {
-            ...(statusChanged && { lastStatus: link.currentStatus, currentStatus: newStatus, lastChanged: now }),
-            ...(nameChanged && { name: newName }),
-            ...(photoChanged && { photoUrl: newPhotoUrl }),
-            lastChecked: now,
-          },
-        });
-
-        let message = `<b>🚨 ALERT: MANUAL CHECK UPDATE</b>\n${DIVIDER}\n`;
-        message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
-        message += `<b>Platform:</b> ${link.platform}\n\n`;
-        if (statusChanged) {
-          message += `<b>Previous:</b> ${getStatusEmoji(link.currentStatus)}\n`;
-          message += `<b>Current:</b> ${getStatusEmoji(newStatus)}\n`;
-        } else {
-          message += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n`;
-        }
-        if (photoChanged) message += `\n<b>Notice:</b> New Photo Detected! 📸\n`;
-        message += `\n<b>Time:</b> ${formatCambodiaTime(now)}\n`;
-        message += `${DIVIDER}\n`;
-        message += `<a href="${link.url}">🔗 View Profile</a>`;
-
-        if (photoChanged && newPhotoUrl) {
-          try {
-            await ctx.replyWithPhoto(newPhotoUrl, { caption: message, parse_mode: "HTML" });
-          } catch (photoError) {
-            logger.error(`Failed to send photo: ${photoError.message}`);
-            await ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true });
-          }
-        } else {
-          await ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true });
-        }
-      } else {
-        await prisma.link.update({
-          where: { id: link.id },
-          data: { lastChecked: now },
-        });
-        
-        let msg = `<b>✅ STATUS UNCHANGED</b>\n${DIVIDER}\n`;
-        if (link.name) msg += `<b>Account:</b> ${link.name}\n`;
-        msg += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n\n`;
-        msg += `<b>Checked at:</b> ${formatCambodiaTime(now)}\n`;
-        msg += `${DIVIDER}`;
-
-        await ctx.reply(msg, { parse_mode: "HTML" });
-      }
-    } catch (error) {
-      logger.error(`Error in /check: ${error.message}`);
-      ctx.reply("❌ An error occurred during manual check.");
-    }
-  });
-
-  bot.command("history", async (ctx) => {
-    const text = ctx.message.text.trim();
-    const parts = text.split(" ");
-    if (parts.length < 2) {
-      return ctx.reply("⚠️ <b>Please provide a URL.</b>\nUsage: <code>/history &lt;url&gt;</code>", { parse_mode: "HTML" });
-    }
-
-    const url = parts[1];
-    try {
-      const link = await prisma.link.findFirst({
-        where: { userId: ctx.dbUser.id, url: url },
-        include: {
-          histories: {
-            orderBy: { checkedAt: 'desc' },
-            take: 10
-          }
-        }
-      });
-
-      if (!link) {
-        return ctx.reply("❌ <b>Link not found</b> in your tracking list.", { parse_mode: "HTML" });
-      }
-
-      if (link.histories.length === 0) {
-        return ctx.reply("📭 <b>No history available</b> for this link yet.", { parse_mode: "HTML" });
-      }
-
-      let message = `<b>🕒 STATUS HISTORY</b>\n${DIVIDER}\n`;
-      message += `<b>Platform:</b> ${link.platform}\n\n`;
-      link.histories.forEach((h) => {
-        message += `• ${getStatusEmoji(h.status)} - ${formatCambodiaTime(h.checkedAt)}\n`;
-      });
-      message += `\n${DIVIDER}\n`;
-      message += `<a href="${link.url}">🔗 View Profile</a>`;
-
-      ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true });
-    } catch (error) {
-      logger.error(`Error in /history: ${error.message}`);
-      ctx.reply("❌ An error occurred while fetching history.");
-    }
+  // Legacy command fallbacks (point them to the interactive dashboard)
+  bot.command(["add", "remove", "check", "history"], (ctx) => {
+    ctx.reply("⚠️ <b>Legacy Command</b>\n\nPlease use the interactive menu buttons below, or simply paste a URL directly into the chat to add a link.", { parse_mode: "HTML", ...mainMenu });
   });
 
   bot.on("message", async (ctx, next) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
       return next();
     }
-    const menuCommands = ['📊 Status', '📋 My Links', '➕ Add Link', '🗑️ Remove Link'];
+    const menuCommands = ['📊 Status', '📋 My Links', '➕ Add Link'];
     if (ctx.message && ctx.message.text && menuCommands.includes(ctx.message.text)) {
       return next();
     }

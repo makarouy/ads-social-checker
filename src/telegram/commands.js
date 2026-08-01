@@ -411,7 +411,8 @@ export const setupCommands = (bot) => {
         return ctx.editMessageText("❌ <b>Link not found.</b>", { parse_mode: "HTML" });
       }
 
-      await ctx.answerCbQuery("🔍 Running manual check... Please wait.");
+      await ctx.answerCbQuery();
+      const waitMsg = await ctx.reply("⏳ <i>Running manual check... please wait (this may take 10-15 seconds).</i>", { parse_mode: "HTML" });
       
       const { status: newStatus, name: newName, photoUrl: newPhotoUrl, followerCount: newFollowers } = await checkLinkStatus(link.platform, link.url);
       const now = new Date();
@@ -444,6 +445,7 @@ export const setupCommands = (bot) => {
 
       // Re-generate the panel with updated data
       const panel = await generateControlPanel(linkId, ctx.dbUser.id);
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id); } catch(e){}
       try { await ctx.deleteMessage(); } catch(e){}
       
       if (panel.photoUrl) {

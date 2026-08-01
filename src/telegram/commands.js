@@ -702,6 +702,51 @@ export const setupCommands = (bot) => {
     }
   });
 
+  bot.command("support", async (ctx) => {
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
+    
+    const text = ctx.message.text.replace("/support", "").trim();
+    if (!text) {
+      return ctx.reply("⚠️ <b>Usage:</b>\n\n<code>/support add [Name] | [URL]</code>\n<code>/support remove [ID]</code>\n<code>/support list</code>", { parse_mode: "HTML" });
+    }
+
+    if (text === "list") {
+      const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
+      if (contacts.length === 0) return ctx.reply("No support contacts found.");
+      let msg = `<b>📞 Support Contacts</b>\n${DIVIDER}\n`;
+      contacts.forEach(c => {
+        msg += `<b>ID:</b> ${c.id}\n<b>Name:</b> ${c.name}\n<b>URL:</b> ${c.url}\n\n`;
+      });
+      return ctx.reply(msg, { parse_mode: "HTML", disable_web_page_preview: true });
+    }
+
+    if (text.startsWith("remove")) {
+      const parts = text.split(" ");
+      const idToRemove = parseInt(parts[1], 10);
+      if (!idToRemove) return ctx.reply("⚠️ Usage: <code>/support remove [ID]</code>", { parse_mode: "HTML" });
+      try {
+        await prisma.supportContact.delete({ where: { id: idToRemove } });
+        return ctx.reply(`✅ Successfully removed contact #${idToRemove}`);
+      } catch(e) {
+        return ctx.reply("❌ Failed to remove contact. Ensure ID is correct.");
+      }
+    }
+
+    if (text.startsWith("add")) {
+      const content = text.replace("add", "").trim();
+      const parts = content.split("|").map(s => s.trim());
+      if (parts.length !== 2) return ctx.reply("⚠️ Usage: <code>/support add Contact Sales | https://t.me/adssupportz</code>", { parse_mode: "HTML" });
+      try {
+        await prisma.supportContact.create({
+          data: { name: parts[0], url: parts[1] }
+        });
+        return ctx.reply("✅ <b>Success!</b> Support contact added.", { parse_mode: "HTML" });
+      } catch(e) {
+        return ctx.reply("❌ Failed to add support contact.");
+      }
+    }
+  });
+
   bot.command("promote", async (ctx) => {
     if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     const parts = ctx.message.text.split(" ");

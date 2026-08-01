@@ -93,3 +93,10 @@ model LicenseKey {
 
   usedByUser   User?    @relation(fields: [usedByUserId], references: [id], onDelete: SetNull)
 }
+
+model SupportContact {
+  id        Int      @id @default(autoincrement())
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+}

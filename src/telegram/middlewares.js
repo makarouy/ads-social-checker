@@ -97,14 +97,26 @@ export const licenseGate = async (ctx, next) => {
       return ctx.answerCbQuery("🔒 Your license has expired.", { show_alert: true });
     }
     
+    // Dynamically fetch support contacts for the paywall
+    let supportButtons = [];
+    try {
+      const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
+      supportButtons = contacts.map(c => [{ text: c.name, url: c.url }]);
+    } catch (e) {
+      // Ignore DB errors
+    }
+
+    // Fallback if the database is empty
+    if (supportButtons.length === 0) {
+      supportButtons = [[{ text: "🛒 Contact Support to Buy Key", url: "https://t.me/adssupportz" }]];
+    }
+    
     return ctx.reply(
       `🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)\n\n💬 <b>Need a key?</b> Contact our support team below to purchase access.`, 
       { 
         parse_mode: "HTML", 
         reply_markup: {
-          inline_keyboard: [
-            [{ text: "🛒 Contact Support to Buy Key", url: "https://t.me/adssupportz" }]
-          ]
+          inline_keyboard: supportButtons
         }
       }
     );

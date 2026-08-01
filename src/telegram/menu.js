@@ -29,6 +29,7 @@ export const updateUserMenu = async (bot, telegramId, role) => {
       { command: "users", description: "[SUPER_ADMIN] View database users" },
       { command: "promote", description: "[SUPER_ADMIN] Promote a user to ADMIN" },
       { command: "demote", description: "[SUPER_ADMIN] Demote an ADMIN to USER" },
+      { command: "support", description: "[SUPER_ADMIN] Manage support contacts" },
     ];
 
     let commandsToSet = baseCommands;

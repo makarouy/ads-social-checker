@@ -219,10 +219,8 @@ const generateControlPanel = async (linkId, userId) => {
   let message = `<b>⚙️ LINK CONTROL PANEL</b>\n${DIVIDER}\n`;
   message += `<b>Platform:</b> ${link.platform}\n`;
   message += `<b>Account:</b> ${link.name || "N/A"}\n`;
-  if (link.followerCount) {
-    message += `<b>Followers:</b> ${link.followerCount} 📈\n`;
-  }
-  message += `\n`;
+  message += `<b>Followers:</b> ${link.followerCount || "Hidden / Anti-Bot"} 📈\n\n`;
+  
   if (link.isArchived) {
     message += `<b>Status:</b> 📦 ARCHIVED\n`;
   } else {

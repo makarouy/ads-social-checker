@@ -61,6 +61,13 @@ export const checkFacebookStatus = async (url) => {
       .locator('meta[name="description"]')
       .getAttribute("content", { timeout: 2000 })
       .catch(() => null);
+      
+    if (!description) {
+      description = await page
+        .locator('meta[property="og:description"]')
+        .getAttribute("content", { timeout: 2000 })
+        .catch(() => null);
+    }
     
     if (description) {
       const match = description.match(/([\d,MK.]+)\s+followers/i) || description.match(/([\d,MK.]+)\s+likes/i);

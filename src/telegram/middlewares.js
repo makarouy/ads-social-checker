@@ -30,21 +30,21 @@ export const registerUser = async (ctx, next) => {
       where: { telegramId: id.toString() },
     });
 
-    if (user && user.role !== "ADMIN" && user.id === 1) {
-      // Upgrade the first legacy user to ADMIN
+    if (user && user.role !== "SUPER_ADMIN" && user.id === 1) {
+      // Upgrade the first legacy user to SUPER_ADMIN
       user = await prisma.user.update({
         where: { id: user.id },
         data: { 
-          role: "ADMIN",
+          role: "SUPER_ADMIN",
           licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000)
         }
       });
-      logger.info(`Upgraded legacy user ${id} to ADMIN`);
+      logger.info(`Upgraded legacy user ${id} to SUPER_ADMIN`);
     }
 
     if (!user) {
       const userCount = await prisma.user.count();
-      const role = userCount === 0 ? "ADMIN" : "USER";
+      const role = userCount === 0 ? "SUPER_ADMIN" : "USER";
       // First user gets admin, plus a 10-year license by default
       const licenseExpiresAt = userCount === 0 ? new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) : null;
       
@@ -76,8 +76,8 @@ export const registerUser = async (ctx, next) => {
 export const licenseGate = async (ctx, next) => {
   if (!ctx.dbUser) return next();
   
-  // Allow ADMIN to always bypass
-  if (ctx.dbUser.role === "ADMIN") return next();
+  // Allow ADMIN and SUPER_ADMIN to always bypass
+  if (ctx.dbUser.role === "ADMIN" || ctx.dbUser.role === "SUPER_ADMIN") return next();
 
   // If message text might be a license key redemption, let it pass to commands.js
   if (ctx.message && ctx.message.text && ctx.message.text.startsWith("AGENCY-")) {

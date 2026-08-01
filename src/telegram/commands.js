@@ -663,7 +663,7 @@ export const setupCommands = (bot) => {
 
   // Admin Management Commands
   bot.command("users", async (ctx) => {
-    if (ctx.dbUser.role !== "ADMIN") return;
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     try {
       const users = await prisma.user.findMany({ orderBy: { id: 'asc' } });
       let msg = `<b>👥 DATABASE USERS</b>\n${DIVIDER}\n`;
@@ -679,7 +679,7 @@ export const setupCommands = (bot) => {
   });
 
   bot.command("promote", async (ctx) => {
-    if (ctx.dbUser.role !== "ADMIN") return;
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     const parts = ctx.message.text.split(" ");
     const targetId = parseInt(parts[1], 10);
     if (!targetId || isNaN(targetId)) return ctx.reply("⚠️ Usage: <code>/promote [UserID]</code>", { parse_mode: "HTML" });
@@ -696,7 +696,7 @@ export const setupCommands = (bot) => {
   });
 
   bot.command("demote", async (ctx) => {
-    if (ctx.dbUser.role !== "ADMIN") return;
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     const parts = ctx.message.text.split(" ");
     const targetId = parseInt(parts[1], 10);
     if (!targetId || isNaN(targetId)) return ctx.reply("⚠️ Usage: <code>/demote [UserID]</code>", { parse_mode: "HTML" });
@@ -714,7 +714,7 @@ export const setupCommands = (bot) => {
 
   // Admin Broadcast Command
   bot.command("broadcast", async (ctx) => {
-    if (ctx.dbUser.role !== "ADMIN") return;
+    if (ctx.dbUser.role !== "ADMIN" && ctx.dbUser.role !== "SUPER_ADMIN") return;
     
     const messageText = ctx.message.text.replace("/broadcast", "").trim();
     if (!messageText) {
@@ -741,7 +741,7 @@ export const setupCommands = (bot) => {
 
   // Admin GenKey Command
   bot.command("genkey", async (ctx) => {
-    if (ctx.dbUser.role !== "ADMIN") return;
+    if (ctx.dbUser.role !== "ADMIN" && ctx.dbUser.role !== "SUPER_ADMIN") return;
 
     const parts = ctx.message.text.split(" ");
     const days = parseInt(parts[1], 10);

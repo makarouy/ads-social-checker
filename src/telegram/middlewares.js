@@ -111,9 +111,16 @@ export const licenseGate = async (ctx, next) => {
       supportButtons = [[{ text: "🛒 Contact Support to Buy Key", url: "https://t.me/adssupportz" }]];
     }
     
-    return ctx.reply(
-      `🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)\n\n💬 <b>Need a key?</b> Contact our support team below to purchase access.`, 
-      { 
+    // Dynamically fetch paywall text
+    let paywallMessage = `🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)\n\n💬 <b>Need a key?</b> Contact our support team below to purchase access.`;
+    try {
+      const config = await prisma.systemConfig.findUnique({ where: { key: "PAYWALL_MESSAGE" } });
+      if (config) paywallMessage = config.value;
+    } catch (e) {
+      // Ignore DB errors
+    }
+    
+    return ctx.reply(paywallMessage, { 
         parse_mode: "HTML", 
         reply_markup: {
           inline_keyboard: supportButtons

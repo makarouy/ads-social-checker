@@ -747,6 +747,45 @@ export const setupCommands = (bot) => {
     }
   });
 
+  bot.command("setpaywall", async (ctx) => {
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
+    const messageText = ctx.message.text.replace("/setpaywall", "").trim();
+    if (!messageText) {
+      return ctx.reply("⚠️ Please provide the message you want to set for the paywall.\nExample: <code>/setpaywall 🔒 Access Denied! Please purchase a key below to continue.</code>", { parse_mode: "HTML" });
+    }
+
+    try {
+      await prisma.systemConfig.upsert({
+        where: { key: "PAYWALL_MESSAGE" },
+        update: { value: messageText },
+        create: { key: "PAYWALL_MESSAGE", value: messageText }
+      });
+      ctx.reply(`✅ <b>Paywall Message Updated!</b>\n\nRun /viewpaywall to see exactly how it looks to your clients.`, { parse_mode: "HTML" });
+    } catch (e) {
+      logger.error(`Error saving paywall message: ${e.message}`);
+      ctx.reply("❌ Failed to save the custom paywall message.");
+    }
+  });
+
+  bot.command("viewpaywall", async (ctx) => {
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
+    try {
+      const config = await prisma.systemConfig.findUnique({ where: { key: "PAYWALL_MESSAGE" } });
+      const message = config ? config.value : `🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)\n\n💬 <b>Need a key?</b> Contact our support team below to purchase access.`;
+      
+      let supportButtons = [];
+      const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
+      supportButtons = contacts.map(c => [{ text: c.name, url: c.url }]);
+      if (supportButtons.length === 0) {
+        supportButtons = [[{ text: "🛒 Contact Support to Buy Key", url: "https://t.me/adssupportz" }]];
+      }
+
+      ctx.reply(message, { parse_mode: "HTML", reply_markup: { inline_keyboard: supportButtons } });
+    } catch (e) {
+      ctx.reply("❌ Failed to fetch the paywall message.");
+    }
+  });
+
   bot.command("promote", async (ctx) => {
     if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     const parts = ctx.message.text.split(" ");

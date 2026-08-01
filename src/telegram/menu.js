@@ -30,6 +30,8 @@ export const updateUserMenu = async (bot, telegramId, role) => {
       { command: "promote", description: "[SUPER_ADMIN] Promote a user to ADMIN" },
       { command: "demote", description: "[SUPER_ADMIN] Demote an ADMIN to USER" },
       { command: "support", description: "[SUPER_ADMIN] Manage support contacts" },
+      { command: "setpaywall", description: "[SUPER_ADMIN] Set the custom paywall message" },
+      { command: "viewpaywall", description: "[SUPER_ADMIN] View the current paywall message" },
     ];
 
     let commandsToSet = baseCommands;

@@ -91,7 +91,7 @@ const handleAddLink = async (ctx, text) => {
 
 const mainMenu = Markup.keyboard([
   ['📊 Status', '📋 My Links'],
-  ['➕ Add Link']
+  ['➕ Add Link', '📞 Contact Support']
 ]).resize();
 
 const generateDashboardFolders = async (userId) => {
@@ -699,6 +699,25 @@ export const setupCommands = (bot) => {
 
   bot.hears('📊 Status', sendStatus);
   bot.command("status", sendStatus);
+
+  const sendSupport = async (ctx) => {
+    try {
+      const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
+      let supportButtons = contacts.map(c => [{ text: c.name, url: c.url }]);
+      if (supportButtons.length === 0) {
+        supportButtons = [[{ text: "🛒 Contact Support", url: "https://t.me/adssupportz" }]];
+      }
+      ctx.reply("💬 <b>Need help?</b> Contact our support team below:", { 
+        parse_mode: "HTML", 
+        reply_markup: { inline_keyboard: supportButtons } 
+      });
+    } catch(e) {
+      ctx.reply("❌ Error fetching support contacts.");
+    }
+  };
+
+  bot.hears('📞 Contact Support', sendSupport);
+  bot.command("contact", sendSupport);
 
   bot.command("start", async (ctx) => {
     try {

@@ -3,6 +3,7 @@ import { logger } from "../utils/logger.js";
 const baseCommands = [
   { command: "status", description: "View the live status of your links" },
   { command: "folder", description: "Manage your client folders" },
+  { command: "contact", description: "Contact Support" },
   { command: "linkgroup", description: "Link a Telegram Group to your alerts" },
   { command: "unlinkgroup", description: "Unlink your Telegram Group" },
   { command: "help", description: "Show instructions" },

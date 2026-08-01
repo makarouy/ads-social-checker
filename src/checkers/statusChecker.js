@@ -137,12 +137,12 @@ export const runGlobalCheck = async (bot) => {
             // Send to the user who added it
             await sendAlertToId(link.user.telegramId);
 
-            // Broadcast to Group Chat if configured
-            if (process.env.GROUP_CHAT_ID) {
+            // Broadcast to Group Chat if configured for this specific user
+            if (link.user.groupChatId) {
               try {
-                await sendAlertToId(process.env.GROUP_CHAT_ID);
+                await sendAlertToId(link.user.groupChatId);
               } catch (groupErr) {
-                logger.error(`Failed to broadcast to GROUP_CHAT_ID: ${groupErr.message}`);
+                logger.error(`Failed to broadcast to groupChatId ${link.user.groupChatId}: ${groupErr.message}`);
               }
             }
             

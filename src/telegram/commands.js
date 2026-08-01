@@ -631,6 +631,36 @@ export const setupCommands = (bot) => {
     ctx.reply("⚠️ <b>Legacy Command</b>\n\nPlease use the interactive menu buttons below, or simply paste a URL directly into the chat to add a link.", { parse_mode: "HTML", ...mainMenu });
   });
 
+  // Multi-Tenant Group Chat Routing Commands
+  bot.command("linkgroup", async (ctx) => {
+    if (ctx.chat.type === "private") {
+      return ctx.reply("⚠️ You must use this command inside a Telegram Group Chat, not in my private DMs.", { parse_mode: "HTML" });
+    }
+    try {
+      await prisma.user.update({
+        where: { id: ctx.dbUser.id },
+        data: { groupChatId: ctx.chat.id.toString() }
+      });
+      ctx.reply(`✅ <b>Success!</b>\n\nYour account is now securely linked to this group.\nAll of your recovered account alerts will be broadcasted here automatically.`, { parse_mode: "HTML" });
+    } catch (error) {
+      logger.error(`Error linking group: ${error.message}`);
+      ctx.reply("❌ Failed to link group.");
+    }
+  });
+
+  bot.command("unlinkgroup", async (ctx) => {
+    try {
+      await prisma.user.update({
+        where: { id: ctx.dbUser.id },
+        data: { groupChatId: null }
+      });
+      ctx.reply("✅ <b>Group Unlinked!</b>\n\nYour alerts will now only be sent to your private DMs.", { parse_mode: "HTML" });
+    } catch (error) {
+      logger.error(`Error unlinking group: ${error.message}`);
+      ctx.reply("❌ Failed to unlink group.");
+    }
+  });
+
   bot.on("message", async (ctx, next) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
       return next();

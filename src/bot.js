@@ -1,6 +1,6 @@
 import { Telegraf } from "telegraf";
 import { config } from "./config/env.js";
-import { rateLimit, registerUser } from "./telegram/middlewares.js";
+import { rateLimit, registerUser, licenseGate } from "./telegram/middlewares.js";
 import { setupCommands } from "./telegram/commands.js";
 import { logger } from "./utils/logger.js";
 
@@ -8,6 +8,7 @@ const bot = new Telegraf(config.botToken);
 
 bot.use(rateLimit);
 bot.use(registerUser);
+bot.use(licenseGate);
 
 setupCommands(bot);
 

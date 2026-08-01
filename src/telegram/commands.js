@@ -661,6 +661,60 @@ export const setupCommands = (bot) => {
     }
   });
 
+  // Admin Broadcast Command
+  bot.command("broadcast", async (ctx) => {
+    if (ctx.dbUser.role !== "ADMIN") return;
+    
+    const messageText = ctx.message.text.replace("/broadcast", "").trim();
+    if (!messageText) {
+      return ctx.reply("⚠️ Please provide a message to broadcast. Usage: <code>/broadcast Hello everyone!</code>", { parse_mode: "HTML" });
+    }
+
+    try {
+      const users = await prisma.user.findMany();
+      let successCount = 0;
+      for (const user of users) {
+        try {
+          await ctx.telegram.sendMessage(user.telegramId, `📢 <b>ADMIN BROADCAST</b>\n\n${messageText}`, { parse_mode: "HTML" });
+          successCount++;
+        } catch (e) {
+          logger.error(`Failed to broadcast to ${user.telegramId}: ${e.message}`);
+        }
+      }
+      ctx.reply(`✅ <b>Broadcast Complete!</b>\nSuccessfully sent to ${successCount} users.`, { parse_mode: "HTML" });
+    } catch (error) {
+      logger.error(`Error in broadcast: ${error.message}`);
+      ctx.reply("❌ Failed to send broadcast.");
+    }
+  });
+
+  // Admin GenKey Command
+  bot.command("genkey", async (ctx) => {
+    if (ctx.dbUser.role !== "ADMIN") return;
+
+    const parts = ctx.message.text.split(" ");
+    const days = parseInt(parts[1], 10);
+    if (!days || isNaN(days)) {
+      return ctx.reply("⚠️ Usage: <code>/genkey [days]</code>\nExample: <code>/genkey 30</code>", { parse_mode: "HTML" });
+    }
+
+    const randomStr = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const keyString = `AGENCY-${days}D-${randomStr}`;
+
+    try {
+      await prisma.licenseKey.create({
+        data: {
+          key: keyString,
+          durationDays: days
+        }
+      });
+      ctx.reply(`✅ <b>License Key Generated!</b>\n\nDuration: ${days} Days\nKey: <code>${keyString}</code>`, { parse_mode: "HTML" });
+    } catch (error) {
+      logger.error(`Error generating key: ${error.message}`);
+      ctx.reply("❌ Failed to generate key.");
+    }
+  });
+
   bot.on("message", async (ctx, next) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
       return next();
@@ -676,6 +730,36 @@ export const setupCommands = (bot) => {
     if (!ctx.message || !ctx.message.text) return next();
 
     const text = ctx.message.text.trim();
+
+    // Handle License Key Redemption
+    if (text.startsWith("AGENCY-")) {
+      try {
+        const license = await prisma.licenseKey.findUnique({ where: { key: text } });
+        if (!license) return ctx.reply("❌ Invalid License Key.");
+        if (license.isUsed) return ctx.reply("❌ This License Key has already been used.");
+
+        const now = new Date();
+        const currentExpiry = ctx.dbUser.licenseExpiresAt && ctx.dbUser.licenseExpiresAt > now ? ctx.dbUser.licenseExpiresAt : now;
+        const newExpiry = new Date(currentExpiry.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
+
+        await prisma.$transaction([
+          prisma.licenseKey.update({
+            where: { id: license.id },
+            data: { isUsed: true, usedByUserId: ctx.dbUser.id, usedAt: now }
+          }),
+          prisma.user.update({
+            where: { id: ctx.dbUser.id },
+            data: { licenseExpiresAt: newExpiry }
+          })
+        ]);
+
+        return ctx.reply(`🎉 <b>License Activated!</b>\n\nYour subscription has been extended by ${license.durationDays} days.\n<b>Expires:</b> ${newExpiry.toDateString()}`, { parse_mode: "HTML", ...mainMenu });
+      } catch (error) {
+        logger.error(`Error redeeming key: ${error.message}`);
+        return ctx.reply("❌ An error occurred while redeeming your key.");
+      }
+    }
+
     if (isValidUrl(text)) {
       await handleAddLink(ctx, text);
     } else if (/^\d+$/.test(text)) {

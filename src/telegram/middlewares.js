@@ -31,18 +31,25 @@ export const registerUser = async (ctx, next) => {
     });
 
     if (!user) {
+      const userCount = await prisma.user.count();
+      const role = userCount === 0 ? "ADMIN" : "USER";
+      // First user gets admin, plus a 10-year license by default
+      const licenseExpiresAt = userCount === 0 ? new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) : null;
+      
       user = await prisma.user.create({
         data: {
           telegramId: id.toString(),
           username: username || null,
           firstName: first_name || null,
           lastName: last_name || null,
+          role,
+          licenseExpiresAt,
           settings: {
             create: {}, // Create default settings
           },
         },
       });
-      logger.info(`New user registered: ${id}`);
+      logger.info(`New user registered: ${id} with role ${role}`);
     }
     
     // Inject user into context for downstream commands
@@ -52,4 +59,28 @@ export const registerUser = async (ctx, next) => {
     logger.error(`Error registering user: ${error.message}`);
     return ctx.reply("An error occurred while processing your user profile.");
   }
+};
+
+export const licenseGate = async (ctx, next) => {
+  if (!ctx.dbUser) return next();
+  
+  // Allow ADMIN to always bypass
+  if (ctx.dbUser.role === "ADMIN") return next();
+
+  // If message text might be a license key redemption, let it pass to commands.js
+  if (ctx.message && ctx.message.text && ctx.message.text.startsWith("AGENCY-")) {
+    return next();
+  }
+  
+  // If license is expired or null
+  const now = new Date();
+  if (!ctx.dbUser.licenseExpiresAt || ctx.dbUser.licenseExpiresAt < now) {
+    // If it's a callback query (button click), answer it so it doesn't spin forever
+    if (ctx.callbackQuery) {
+      return ctx.answerCbQuery("🔒 Your license has expired.", { show_alert: true });
+    }
+    return ctx.reply("🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)", { parse_mode: "HTML", reply_markup: { remove_keyboard: true } });
+  }
+
+  return next();
 };

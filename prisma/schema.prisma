@@ -18,12 +18,15 @@ model User {
   firstName    String?
   lastName     String?
   groupChatId  String?
+  role         String   @default("USER")
+  licenseExpiresAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   links         Link[]
   notifications Notification[]
   settings      Setting?
+  usedLicenseKeys LicenseKey[]
 }
 
 model Link {
@@ -77,4 +80,16 @@ model Setting {
   updatedAt      DateTime @updatedAt
 
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LicenseKey {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique
+  durationDays Int
+  isUsed       Boolean  @default(false)
+  usedByUserId Int?
+  createdAt    DateTime @default(now())
+  usedAt       DateTime?
+
+  usedByUser   User?    @relation(fields: [usedByUserId], references: [id], onDelete: SetNull)
 }

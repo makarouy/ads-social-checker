@@ -103,7 +103,15 @@ export const licenseGate = async (ctx, next) => {
     let supportButtons = [];
     try {
       const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
-      supportButtons = contacts.map(c => [{ text: c.name, url: c.url }]);
+      let row = [];
+      for (const c of contacts) {
+        row.push({ text: c.name, url: c.url });
+        if (row.length === 2) {
+          supportButtons.push(row);
+          row = [];
+        }
+      }
+      if (row.length > 0) supportButtons.push(row);
     } catch (e) {
       // Ignore DB errors
     }

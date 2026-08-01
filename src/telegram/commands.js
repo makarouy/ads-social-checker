@@ -703,7 +703,16 @@ export const setupCommands = (bot) => {
   const sendSupport = async (ctx) => {
     try {
       const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
-      let supportButtons = contacts.map(c => [{ text: c.name, url: c.url }]);
+      let supportButtons = [];
+      let row = [];
+      for (const c of contacts) {
+        row.push({ text: c.name, url: c.url });
+        if (row.length === 2) {
+          supportButtons.push(row);
+          row = [];
+        }
+      }
+      if (row.length > 0) supportButtons.push(row);
       if (supportButtons.length === 0) {
         supportButtons = [[{ text: "Contact Support", url: "https://t.me/adssupportz" }]];
       }
@@ -878,12 +887,16 @@ export const setupCommands = (bot) => {
     if (text.startsWith("add")) {
       const content = text.replace("add", "").trim();
       const parts = content.split("|").map(s => s.trim());
-      if (parts.length !== 2) return ctx.reply("⚠️ Usage: <code>/support add Contact Sales | https://t.me/adssupportz</code>", { parse_mode: "HTML" });
+      if (parts.length % 2 !== 0 || parts.length === 0) return ctx.reply("⚠️ Usage: <code>/support add Contact Sales | https://t.me/adssupportz</code>", { parse_mode: "HTML" });
       try {
-        await prisma.supportContact.create({
-          data: { name: parts[0], url: parts[1] }
-        });
-        return ctx.reply("✅ <b>Success!</b> Support contact added.", { parse_mode: "HTML" });
+        for (let i = 0; i < parts.length; i += 2) {
+          if (parts[i] && parts[i+1]) {
+            await prisma.supportContact.create({
+              data: { name: parts[i], url: parts[i+1] }
+            });
+          }
+        }
+        return ctx.reply("✅ <b>Success!</b> Support contact(s) added.", { parse_mode: "HTML" });
       } catch(e) {
         return ctx.reply(`❌ Failed to add support contact. Error: ${e.message}`);
       }

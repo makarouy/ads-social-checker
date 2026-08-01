@@ -4,6 +4,8 @@ import { getStatusEmoji, formatCambodiaTime } from "../utils/formatters.js";
 import { logger } from "../utils/logger.js";
 import { Markup } from "telegraf";
 
+const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
+
 const isValidUrl = (string) => {
   try {
     new URL(string);
@@ -15,13 +17,13 @@ const isValidUrl = (string) => {
 
 const handleAddLink = async (ctx, text) => {
   if (!isValidUrl(text)) {
-    return ctx.reply("❌ Invalid URL format. Please send a valid web address.");
+    return ctx.reply("❌ <b>Invalid URL format.</b> Please send a valid web address.", { parse_mode: "HTML" });
   }
 
   const url = text;
   const platform = detectPlatform(url);
   if (!platform) {
-    return ctx.reply("⚠️ Unsupported platform. I currently support:\n• Facebook\n• Instagram\n• TikTok\n• YouTube");
+    return ctx.reply("⚠️ <b>Unsupported platform.</b> I currently support:\n• Facebook\n• Instagram\n• TikTok\n• YouTube", { parse_mode: "HTML" });
   }
 
   try {
@@ -30,10 +32,10 @@ const handleAddLink = async (ctx, text) => {
     });
 
     if (existingLink) {
-      return ctx.reply("✅ You are already monitoring this link!");
+      return ctx.reply("✅ <b>You are already monitoring this link!</b>", { parse_mode: "HTML" });
     }
 
-    const waitMsg = await ctx.reply("🔍 Analyzing URL... please wait.");
+    const waitMsg = await ctx.reply("🔍 <i>Analyzing URL... please wait.</i>", { parse_mode: "HTML" });
     const { status: currentStatus, name, photoUrl } = await checkLinkStatus(platform, url);
 
     await prisma.link.create({
@@ -48,9 +50,12 @@ const handleAddLink = async (ctx, text) => {
       },
     });
 
-    let caption = `🎉 *Link Added Successfully!*\n\n*Platform:* ${platform}`;
-    if (name) caption += `\n*Name:* ${name}`;
-    caption += `\n*URL:* ${url}`;
+    let caption = `<b>✅ LINK ADDED SUCCESSFULLY</b>\n${DIVIDER}\n`;
+    caption += `<b>Platform:</b> ${platform}\n`;
+    if (name) caption += `<b>Name:</b> ${name}\n`;
+    caption += `\n<b>Status:</b> ${getStatusEmoji(currentStatus)}\n`;
+    caption += `${DIVIDER}\n`;
+    caption += `<a href="${url}">🔗 View Profile</a>`;
 
     const replyMarkup = {
       reply_markup: {
@@ -66,17 +71,17 @@ const handleAddLink = async (ctx, text) => {
 
     if (photoUrl) {
       try {
-        await ctx.replyWithPhoto(photoUrl, { caption, parse_mode: "Markdown", ...replyMarkup });
+        await ctx.replyWithPhoto(photoUrl, { caption, parse_mode: "HTML", ...replyMarkup });
       } catch (photoError) {
         logger.error(`Failed to send photo: ${photoError.message}`);
-        await ctx.reply(caption, { parse_mode: "Markdown", disable_web_page_preview: true, ...replyMarkup });
+        await ctx.reply(caption, { parse_mode: "HTML", disable_web_page_preview: true, ...replyMarkup });
       }
     } else {
-      await ctx.reply(caption, { parse_mode: "Markdown", disable_web_page_preview: true, ...replyMarkup });
+      await ctx.reply(caption, { parse_mode: "HTML", disable_web_page_preview: true, ...replyMarkup });
     }
   } catch (error) {
     logger.error(`Error in add link: ${error.message}`);
-    await ctx.reply("❌ An error occurred while adding the link. Please try again later.");
+    await ctx.reply("❌ <b>An error occurred</b> while adding the link. Please try again later.", { parse_mode: "HTML" });
   }
 };
 
@@ -88,19 +93,21 @@ const mainMenu = Markup.keyboard([
 export const setupCommands = (bot) => {
   bot.command("start", (ctx) => {
     ctx.reply(
-      "🌟 *Welcome to Ads Social Checker!* 🌟\n\n" +
-        "I am your personal automated monitor. I keep an eye on social media profiles and instantly alert you the moment they go down or change.\n\n" +
-        "Use the menu below to navigate! 👇",
+      `<b>🌟 ADS SOCIAL CHECKER 🌟</b>\n${DIVIDER}\n` +
+      `Welcome to your premium monitoring dashboard.\n\n` +
+      `<b>Supported Platforms:</b>\n` +
+      `• Facebook\n• Instagram\n• TikTok\n• YouTube\n\n` +
+      `<i>Use the menu below to navigate! 👇</i>`,
       { 
-        parse_mode: "Markdown",
+        parse_mode: "HTML",
         ...mainMenu
       }
     );
   });
 
   bot.hears('➕ Add Link', (ctx) => {
-    ctx.reply("🔗 *How to add a link:*\n\nJust paste the Facebook, Instagram, TikTok, or YouTube URL directly into this chat!", {
-      parse_mode: "Markdown",
+    ctx.reply(`🔗 <b>How to add a link:</b>\n\nJust paste the Facebook, Instagram, TikTok, or YouTube URL directly into this chat!`, {
+      parse_mode: "HTML",
       ...mainMenu
     });
   });
@@ -112,11 +119,10 @@ export const setupCommands = (bot) => {
       });
 
       if (links.length === 0) {
-        return ctx.reply("📭 You don't have any links to remove.", mainMenu);
+        return ctx.reply("📭 <b>You don't have any links to remove.</b>", { parse_mode: "HTML", ...mainMenu });
       }
 
       const buttons = links.map((link) => {
-        // Create a short label for the button
         let label = `❌ [${link.platform}] `;
         if (link.name) {
           label += link.name.length > 20 ? link.name.substring(0, 20) + "..." : link.name;
@@ -126,11 +132,10 @@ export const setupCommands = (bot) => {
         return [Markup.button.callback(label, `remove_${link.id}`)];
       });
 
-      // Add a cancel button at the bottom
       buttons.push([Markup.button.callback("🚫 Cancel", "cancel_remove")]);
 
-      ctx.reply("🗑️ *Select a link to remove:*", {
-        parse_mode: "Markdown",
+      ctx.reply("🗑️ <b>Select a link to remove:</b>", {
+        parse_mode: "HTML",
         ...Markup.inlineKeyboard(buttons)
       });
     } catch (error) {
@@ -150,7 +155,7 @@ export const setupCommands = (bot) => {
 
       if (!link) {
         await ctx.answerCbQuery("Link not found.");
-        return ctx.editMessageText("❌ This link has already been removed or does not exist.");
+        return ctx.editMessageText("❌ This link has already been removed or does not exist.", { parse_mode: "HTML" });
       }
 
       await prisma.link.delete({
@@ -158,7 +163,7 @@ export const setupCommands = (bot) => {
       });
 
       await ctx.answerCbQuery("Link removed!");
-      ctx.editMessageText(`✅ *Successfully removed:*\n${link.url}`, { parse_mode: "Markdown" });
+      ctx.editMessageText(`✅ <b>Successfully removed:</b>\n${link.url}`, { parse_mode: "HTML" });
     } catch (error) {
       logger.error(`Error deleting link via button: ${error.message}`);
       ctx.answerCbQuery("Error removing link.", { show_alert: true });
@@ -167,7 +172,7 @@ export const setupCommands = (bot) => {
 
   bot.action("cancel_remove", (ctx) => {
     ctx.answerCbQuery();
-    ctx.editMessageText("🚫 Removal canceled.");
+    ctx.editMessageText("🚫 <i>Removal canceled.</i>", { parse_mode: "HTML" });
   });
 
   const sendList = async (ctx) => {
@@ -177,15 +182,16 @@ export const setupCommands = (bot) => {
       });
 
       if (links.length === 0) {
-        return ctx.reply("📭 You are not tracking any links yet. Paste a link to get started!", mainMenu);
+        return ctx.reply("📭 <b>You are not tracking any links yet.</b> Paste a link to get started!", { parse_mode: "HTML", ...mainMenu });
       }
 
-      let message = "📋 *Your Monitored Links:*\n\n";
+      let message = `<b>📋 YOUR MONITORED LINKS</b>\n${DIVIDER}\n`;
       links.forEach((link, idx) => {
-        message += `*${idx + 1}.* [${link.platform}] ${link.url}\n`;
+        message += `<b>${idx + 1}.</b> [${link.platform}] <a href="${link.url}">Profile Link</a>\n`;
       });
+      message += `${DIVIDER}`;
 
-      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true, ...mainMenu });
+      ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true, ...mainMenu });
     } catch (error) {
       logger.error(`Error in list: ${error.message}`);
       ctx.reply("❌ An error occurred while fetching your links.");
@@ -199,19 +205,20 @@ export const setupCommands = (bot) => {
       });
 
       if (links.length === 0) {
-        return ctx.reply("📭 You are not tracking any links yet.", mainMenu);
+        return ctx.reply("📭 <b>You are not tracking any links yet.</b>", { parse_mode: "HTML", ...mainMenu });
       }
 
-      let message = "📊 *Live Status Report:*\n\n";
+      let message = `<b>📊 LIVE STATUS REPORT</b>\n${DIVIDER}\n`;
       links.forEach((link, idx) => {
         const emoji = getStatusEmoji(link.currentStatus);
         const namePart = link.name ? ` (${link.name})` : "";
-        message += `*${idx + 1}. ${link.platform}*${namePart}\n`;
-        message += `${emoji}\n`;
-        message += `🔗 [Link](${link.url})\n\n`;
+        message += `<b>${idx + 1}. ${link.platform}</b>${namePart}\n`;
+        message += `Status: ${emoji}\n`;
+        message += `<a href="${link.url}">🔗 View Profile</a>\n\n`;
       });
+      message += `${DIVIDER}`;
 
-      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true, ...mainMenu });
+      ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true, ...mainMenu });
     } catch (error) {
       logger.error(`Error in status: ${error.message}`);
       ctx.reply("❌ An error occurred while fetching statuses.");
@@ -226,15 +233,15 @@ export const setupCommands = (bot) => {
 
   bot.command("help", (ctx) => {
     ctx.reply(
-      "🛠️ *Available Commands:*\n\n" +
-        "🔹 /add `<url>` - Monitor a new link\n" +
-        "🔹 /remove `<url>` - Stop monitoring a link\n" +
+      `<b>🛠️ AVAILABLE COMMANDS</b>\n${DIVIDER}\n` +
+        "🔹 /add <code>&lt;url&gt;</code> - Monitor a new link\n" +
+        "🔹 /remove - Stop monitoring a link\n" +
         "🔹 /list - View all your tracked links\n" +
         "🔹 /status - Check the live status of your links\n" +
-        "🔹 /history `<url>` - View the status history of a link\n" +
-        "🔹 /check `<url>` - Force a manual status check right now\n\n" +
-        "*(You can also just use the menu buttons!)*",
-      { parse_mode: "Markdown", ...mainMenu }
+        "🔹 /history <code>&lt;url&gt;</code> - View the status history of a link\n" +
+        "🔹 /check <code>&lt;url&gt;</code> - Force a manual status check right now\n\n" +
+        "<i>(You can also just use the menu buttons!)</i>",
+      { parse_mode: "HTML", ...mainMenu }
     );
   });
 
@@ -242,7 +249,7 @@ export const setupCommands = (bot) => {
     const text = ctx.message.text.trim();
     const parts = text.split(" ");
     if (parts.length < 2) {
-      return ctx.reply("⚠️ Please provide a URL. Usage: `/add <url>`", { parse_mode: "Markdown" });
+      return ctx.reply("⚠️ <b>Please provide a URL.</b>\nUsage: <code>/add &lt;url&gt;</code>", { parse_mode: "HTML" });
     }
     await handleAddLink(ctx, parts[1]);
   });
@@ -251,7 +258,6 @@ export const setupCommands = (bot) => {
     const text = ctx.message.text.trim();
     const parts = text.split(" ");
     if (parts.length < 2) {
-      // Show the interactive menu if no URL is provided
       return handleRemoveMenu(ctx);
     }
 
@@ -262,14 +268,14 @@ export const setupCommands = (bot) => {
       });
 
       if (!link) {
-        return ctx.reply("❌ Link not found in your tracking list.");
+        return ctx.reply("❌ <b>Link not found</b> in your tracking list.", { parse_mode: "HTML" });
       }
 
       await prisma.link.delete({
         where: { id: link.id },
       });
 
-      ctx.reply("🗑️ *Link removed successfully.*", { parse_mode: "Markdown" });
+      ctx.reply("🗑️ <b>Link removed successfully.</b>", { parse_mode: "HTML" });
     } catch (error) {
       logger.error(`Error in /remove: ${error.message}`);
       ctx.reply("❌ An error occurred while removing the link.");
@@ -280,7 +286,7 @@ export const setupCommands = (bot) => {
     const text = ctx.message.text.trim();
     const parts = text.split(" ");
     if (parts.length < 2) {
-      return ctx.reply("⚠️ Please provide a URL. Usage: `/check <url>`", { parse_mode: "Markdown" });
+      return ctx.reply("⚠️ <b>Please provide a URL.</b>\nUsage: <code>/check &lt;url&gt;</code>", { parse_mode: "HTML" });
     }
 
     const url = parts[1];
@@ -290,10 +296,10 @@ export const setupCommands = (bot) => {
       });
 
       if (!link) {
-        return ctx.reply("❌ Link not found in your tracking list. Please add it first.");
+        return ctx.reply("❌ <b>Link not found.</b> Please add it first.", { parse_mode: "HTML" });
       }
 
-      const waitMsg = await ctx.reply("🔍 Running manual check...");
+      const waitMsg = await ctx.reply("🔍 <i>Running manual check...</i>", { parse_mode: "HTML" });
       const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
       const now = new Date();
 
@@ -322,21 +328,29 @@ export const setupCommands = (bot) => {
           },
         });
 
-        let message = `🚨 *Update Detected (Manual Check)*\n\n*Platform:* ${link.platform}\n*URL:* ${link.url}\n`;
-        if (statusChanged) message += `*Old Status:* ${getStatusEmoji(link.currentStatus)}\n*New Status:* ${getStatusEmoji(newStatus)}\n`;
-        if (nameChanged) message += `*New Name:* ${newName}\n`;
-        if (photoChanged) message += `*New Photo Detected!* 📸\n`;
-        message += `\n*Time:* ${formatCambodiaTime(now)}`;
+        let message = `<b>🚨 ALERT: MANUAL CHECK UPDATE</b>\n${DIVIDER}\n`;
+        message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
+        message += `<b>Platform:</b> ${link.platform}\n\n`;
+        if (statusChanged) {
+          message += `<b>Previous:</b> ${getStatusEmoji(link.currentStatus)}\n`;
+          message += `<b>Current:</b> ${getStatusEmoji(newStatus)}\n`;
+        } else {
+          message += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n`;
+        }
+        if (photoChanged) message += `\n<b>Notice:</b> New Photo Detected! 📸\n`;
+        message += `\n<b>Time:</b> ${formatCambodiaTime(now)}\n`;
+        message += `${DIVIDER}\n`;
+        message += `<a href="${link.url}">🔗 View Profile</a>`;
 
         if (photoChanged && newPhotoUrl) {
           try {
-            await ctx.replyWithPhoto(newPhotoUrl, { caption: message, parse_mode: "Markdown" });
+            await ctx.replyWithPhoto(newPhotoUrl, { caption: message, parse_mode: "HTML" });
           } catch (photoError) {
             logger.error(`Failed to send photo: ${photoError.message}`);
-            await ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
+            await ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true });
           }
         } else {
-          await ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
+          await ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true });
         }
       } else {
         await prisma.link.update({
@@ -344,10 +358,13 @@ export const setupCommands = (bot) => {
           data: { lastChecked: now },
         });
         
-        let msg = `✅ *Status Unchanged*\n\n${getStatusEmoji(newStatus)}`;
-        if (link.name) msg += `\n*Name:* ${link.name}`;
-        msg += `\n\n*Checked at:* ${formatCambodiaTime(now)}`;
-        await ctx.reply(msg, { parse_mode: "Markdown" });
+        let msg = `<b>✅ STATUS UNCHANGED</b>\n${DIVIDER}\n`;
+        if (link.name) msg += `<b>Account:</b> ${link.name}\n`;
+        msg += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n\n`;
+        msg += `<b>Checked at:</b> ${formatCambodiaTime(now)}\n`;
+        msg += `${DIVIDER}`;
+
+        await ctx.reply(msg, { parse_mode: "HTML" });
       }
     } catch (error) {
       logger.error(`Error in /check: ${error.message}`);
@@ -359,7 +376,7 @@ export const setupCommands = (bot) => {
     const text = ctx.message.text.trim();
     const parts = text.split(" ");
     if (parts.length < 2) {
-      return ctx.reply("⚠️ Please provide a URL. Usage: `/history <url>`", { parse_mode: "Markdown" });
+      return ctx.reply("⚠️ <b>Please provide a URL.</b>\nUsage: <code>/history &lt;url&gt;</code>", { parse_mode: "HTML" });
     }
 
     const url = parts[1];
@@ -375,19 +392,22 @@ export const setupCommands = (bot) => {
       });
 
       if (!link) {
-        return ctx.reply("❌ Link not found in your tracking list.");
+        return ctx.reply("❌ <b>Link not found</b> in your tracking list.", { parse_mode: "HTML" });
       }
 
       if (link.histories.length === 0) {
-        return ctx.reply("📭 No history available for this link yet.");
+        return ctx.reply("📭 <b>No history available</b> for this link yet.", { parse_mode: "HTML" });
       }
 
-      let message = `🕒 *History for:*\n[${link.platform}] ${link.url}\n\n`;
+      let message = `<b>🕒 STATUS HISTORY</b>\n${DIVIDER}\n`;
+      message += `<b>Platform:</b> ${link.platform}\n\n`;
       link.histories.forEach((h) => {
         message += `• ${getStatusEmoji(h.status)} - ${formatCambodiaTime(h.checkedAt)}\n`;
       });
+      message += `\n${DIVIDER}\n`;
+      message += `<a href="${link.url}">🔗 View Profile</a>`;
 
-      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
+      ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true });
     } catch (error) {
       logger.error(`Error in /history: ${error.message}`);
       ctx.reply("❌ An error occurred while fetching history.");
@@ -398,7 +418,6 @@ export const setupCommands = (bot) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
       return next();
     }
-    // Ignore menu commands in plain text handler
     const menuCommands = ['📊 Status', '📋 My Links', '➕ Add Link', '🗑️ Remove Link'];
     if (ctx.message && ctx.message.text && menuCommands.includes(ctx.message.text)) {
       return next();

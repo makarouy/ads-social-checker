@@ -85,28 +85,39 @@ export const runGlobalCheck = async (bot) => {
         });
 
         // Notify user
-        let message = `🚨 *Automated Alert: Update Detected*\n\n*Platform:* ${link.platform}\n*URL:* ${link.url}\n`;
-        if (statusChanged) message += `*Old Status:* ${getStatusEmoji(link.currentStatus)}\n*New Status:* ${getStatusEmoji(newStatus)}\n`;
-        if (nameChanged) message += `*Name updated:* ${newName}\n`;
-        if (photoChanged) message += `*New Photo Detected!* 📸\n`;
-        message += `\n*Time:* ${formatCambodiaTime(now)}`;
+        const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
+        let message = `<b>🔔 ALERT: STATUS CHANGE</b>\n${DIVIDER}\n`;
+        message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
+        message += `<b>Platform:</b> ${link.platform}\n\n`;
+        if (statusChanged) {
+          message += `<b>Previous:</b> ${getStatusEmoji(link.currentStatus)}\n`;
+          message += `<b>Current:</b> ${getStatusEmoji(newStatus)}\n`;
+        } else {
+          message += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n`;
+        }
+        if (photoChanged) message += `\n<b>Notice:</b> New Photo Detected! 📸\n`;
+        message += `\n<b>Time:</b> ${formatCambodiaTime(now)}\n`;
+        message += `${DIVIDER}\n`;
+        message += `<a href="${link.url}">🔗 View Profile</a>`;
         
         try {
           if (photoChanged && newPhotoUrl) {
             try {
               await bot.telegram.sendPhoto(link.user.telegramId, newPhotoUrl, {
                 caption: message,
-                parse_mode: "Markdown",
+                parse_mode: "HTML",
               });
             } catch (photoError) {
               logger.error(`Global check: Failed to send photo: ${photoError.message}`);
               await bot.telegram.sendMessage(link.user.telegramId, message, {
-                parse_mode: "Markdown",
+                parse_mode: "HTML",
+                disable_web_page_preview: true
               });
             }
           } else {
             await bot.telegram.sendMessage(link.user.telegramId, message, {
-              parse_mode: "Markdown",
+              parse_mode: "HTML",
+              disable_web_page_preview: true
             });
           }
           

@@ -90,14 +90,81 @@ const mainMenu = Markup.keyboard([
   ['➕ Add Link']
 ]).resize();
 
-const generateDashboardList = async (userId) => {
-  const links = await prisma.link.findMany({
-    where: { userId },
-  });
-
-  if (links.length === 0) {
+const generateDashboardFolders = async (userId) => {
+  const allCount = await prisma.link.count({ where: { userId } });
+  
+  if (allCount === 0) {
     return { text: "📭 <b>You are not tracking any links yet.</b> Paste a link to get started!", markup: null };
   }
+
+  const liveCount = await prisma.link.count({
+    where: { userId, currentStatus: 'LIVE' }
+  });
+  const deadCount = await prisma.link.count({
+    where: { userId, currentStatus: { in: ['DISABLED', 'DELETED', 'NOT_FOUND', 'UNKNOWN'] } }
+  });
+
+  const buttons = [
+    [Markup.button.callback(`🗂️ All Links (${allCount})`, `list_all_0`)],
+    [Markup.button.callback(`🔴 Disabled / Dead (${deadCount})`, `list_dead_0`)],
+    [Markup.button.callback(`🟢 Live / Recovered (${liveCount})`, `list_live_0`)],
+    [
+      Markup.button.callback(`📘 FB`, `list_fb_0`),
+      Markup.button.callback(`📸 IG`, `list_ig_0`)
+    ],
+    [
+      Markup.button.callback(`🎵 TikTok`, `list_tt_0`),
+      Markup.button.callback(`▶️ YouTube`, `list_yt_0`)
+    ]
+  ];
+
+  return {
+    text: `<b>🗂️ MASTER DASHBOARD</b>\n${DIVIDER}\n<i>Select a category to view your links:</i>`,
+    markup: Markup.inlineKeyboard(buttons)
+  };
+};
+
+const generateDashboardList = async (userId, filter, page) => {
+  let whereClause = { userId };
+  let title = "ALL LINKS";
+
+  if (filter === "dead") {
+    whereClause.currentStatus = { in: ['DISABLED', 'DELETED', 'NOT_FOUND', 'UNKNOWN'] };
+    title = "DISABLED / DEAD ACCOUNTS";
+  } else if (filter === "live") {
+    whereClause.currentStatus = 'LIVE';
+    title = "LIVE / RECOVERED ACCOUNTS";
+  } else if (filter === "fb") {
+    whereClause.platform = 'Facebook';
+    title = "FACEBOOK ACCOUNTS";
+  } else if (filter === "ig") {
+    whereClause.platform = 'Instagram';
+    title = "INSTAGRAM ACCOUNTS";
+  } else if (filter === "tt") {
+    whereClause.platform = 'TikTok';
+    title = "TIKTOK ACCOUNTS";
+  } else if (filter === "yt") {
+    whereClause.platform = 'YouTube';
+    title = "YOUTUBE ACCOUNTS";
+  }
+
+  const pageSize = 10;
+  const totalLinks = await prisma.link.count({ where: whereClause });
+  const totalPages = Math.ceil(totalLinks / pageSize);
+  
+  if (totalLinks === 0) {
+    return {
+      text: `<b>🗂️ ${title}</b>\n${DIVIDER}\n📭 No links found in this category.`,
+      markup: Markup.inlineKeyboard([[Markup.button.callback("🔙 Back to Folders", "dashboard_folders")]])
+    };
+  }
+
+  const links = await prisma.link.findMany({
+    where: whereClause,
+    take: pageSize,
+    skip: page * pageSize,
+    orderBy: { id: 'desc' }
+  });
 
   const buttons = links.map((link) => {
     let label = `${getStatusEmoji(link.currentStatus).split(' ')[0]} [${link.platform}] `;
@@ -109,8 +176,22 @@ const generateDashboardList = async (userId) => {
     return [Markup.button.callback(label, `view_link_${link.id}`)];
   });
 
+  // Pagination buttons
+  const navButtons = [];
+  if (page > 0) {
+    navButtons.push(Markup.button.callback("⬅️ Prev", `list_${filter}_${page - 1}`));
+  }
+  if (page < totalPages - 1) {
+    navButtons.push(Markup.button.callback("Next ➡️", `list_${filter}_${page + 1}`));
+  }
+  
+  if (navButtons.length > 0) {
+    buttons.push(navButtons);
+  }
+  buttons.push([Markup.button.callback("🔙 Back to Folders", "dashboard_folders")]);
+
   return {
-    text: `<b>📋 MASTER LINK DASHBOARD</b>\n${DIVIDER}\n<i>Select a link to manage it:</i>`,
+    text: `<b>🗂️ ${title} (Page ${page + 1}/${totalPages})</b>\n${DIVIDER}\n<i>Select a link to manage it:</i>`,
     markup: Markup.inlineKeyboard(buttons)
   };
 };
@@ -138,7 +219,7 @@ const generateControlPanel = async (linkId, userId) => {
     ],
     [
       Markup.button.callback("🗑️ Remove", `remove_link_${link.id}`),
-      Markup.button.callback("🔙 Back", "dashboard_list")
+      Markup.button.callback("🔙 Back", "dashboard_folders")
     ]
   ]);
 
@@ -169,7 +250,7 @@ export const setupCommands = (bot) => {
 
   const sendDashboard = async (ctx) => {
     try {
-      const { text, markup } = await generateDashboardList(ctx.dbUser.id);
+      const { text, markup } = await generateDashboardFolders(ctx.dbUser.id);
       if (!markup) {
         return ctx.reply(text, { parse_mode: "HTML", ...mainMenu });
       }
@@ -183,17 +264,30 @@ export const setupCommands = (bot) => {
   bot.hears('📋 My Links', sendDashboard);
   bot.command("list", sendDashboard);
 
-  bot.action("dashboard_list", async (ctx) => {
+  bot.action("dashboard_folders", async (ctx) => {
     try {
-      const { text, markup } = await generateDashboardList(ctx.dbUser.id);
+      const { text, markup } = await generateDashboardFolders(ctx.dbUser.id);
       if (!markup) {
         return ctx.editMessageText(text, { parse_mode: "HTML" });
       }
       ctx.editMessageText(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
       ctx.answerCbQuery();
     } catch (error) {
-      logger.error(`Error in dashboard_list: ${error.message}`);
-      ctx.answerCbQuery("Error loading dashboard.", { show_alert: true });
+      logger.error(`Error in dashboard_folders: ${error.message}`);
+      ctx.answerCbQuery("Error loading folders.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^list_([a-z]+)_(\d+)$/, async (ctx) => {
+    const filter = ctx.match[1];
+    const page = parseInt(ctx.match[2], 10);
+    try {
+      const { text, markup } = await generateDashboardList(ctx.dbUser.id, filter, page);
+      ctx.editMessageText(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      ctx.answerCbQuery();
+    } catch (error) {
+      logger.error(`Error in list page: ${error.message}`);
+      ctx.answerCbQuery("Error loading list.", { show_alert: true });
     }
   });
 
@@ -293,7 +387,7 @@ export const setupCommands = (bot) => {
       const markup = Markup.inlineKeyboard([
         [
           Markup.button.callback("🔙 Panel", `view_link_${link.id}`),
-          Markup.button.callback("📋 List", "dashboard_list")
+          Markup.button.callback("🗂️ Folders", "dashboard_folders")
         ]
       ]);
 
@@ -325,7 +419,7 @@ export const setupCommands = (bot) => {
       await ctx.answerCbQuery("Link removed!");
       
       const markup = Markup.inlineKeyboard([
-        [Markup.button.callback("🔙 Back to Master List", "dashboard_list")]
+        [Markup.button.callback("🔙 Back to Folders", "dashboard_folders")]
       ]);
       
       ctx.editMessageText(`✅ <b>Successfully removed:</b>\n${link.url}`, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });

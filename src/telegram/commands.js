@@ -885,7 +885,7 @@ export const setupCommands = (bot) => {
         });
         return ctx.reply("✅ <b>Success!</b> Support contact added.", { parse_mode: "HTML" });
       } catch(e) {
-        return ctx.reply("❌ Failed to add support contact.");
+        return ctx.reply(`❌ Failed to add support contact. Error: ${e.message}`);
       }
     }
   });

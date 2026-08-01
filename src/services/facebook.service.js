@@ -55,6 +55,7 @@ export const checkFacebookStatus = async (url) => {
       return { status: "RATE_LIMITED", name, photoUrl };
     }
 
+    logger.warn(`Unexpected Facebook status for ${url}: ${status}`);
     return { status: "UNKNOWN", name, photoUrl };
   } catch (error) {
     logger.error(`Facebook check error for ${url}: ${error.message}`);

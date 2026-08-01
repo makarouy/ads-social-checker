@@ -105,11 +105,69 @@ export const setupCommands = (bot) => {
     });
   });
 
-  bot.hears('🗑️ Remove Link', (ctx) => {
-    ctx.reply("🗑️ *How to remove a link:*\n\nType `/remove <url>` to stop tracking a specific link.", {
-      parse_mode: "Markdown",
-      ...mainMenu
-    });
+  const handleRemoveMenu = async (ctx) => {
+    try {
+      const links = await prisma.link.findMany({
+        where: { userId: ctx.dbUser.id },
+      });
+
+      if (links.length === 0) {
+        return ctx.reply("📭 You don't have any links to remove.", mainMenu);
+      }
+
+      const buttons = links.map((link) => {
+        // Create a short label for the button
+        let label = `❌ [${link.platform}] `;
+        if (link.name) {
+          label += link.name.length > 20 ? link.name.substring(0, 20) + "..." : link.name;
+        } else {
+          label += link.url.length > 25 ? link.url.substring(0, 25) + "..." : link.url;
+        }
+        return [Markup.button.callback(label, `remove_${link.id}`)];
+      });
+
+      // Add a cancel button at the bottom
+      buttons.push([Markup.button.callback("🚫 Cancel", "cancel_remove")]);
+
+      ctx.reply("🗑️ *Select a link to remove:*", {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard(buttons)
+      });
+    } catch (error) {
+      logger.error(`Error generating remove menu: ${error.message}`);
+      ctx.reply("❌ An error occurred while fetching your links.");
+    }
+  };
+
+  bot.hears('🗑️ Remove Link', handleRemoveMenu);
+
+  bot.action(/^remove_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    try {
+      const link = await prisma.link.findFirst({
+        where: { id: linkId, userId: ctx.dbUser.id },
+      });
+
+      if (!link) {
+        await ctx.answerCbQuery("Link not found.");
+        return ctx.editMessageText("❌ This link has already been removed or does not exist.");
+      }
+
+      await prisma.link.delete({
+        where: { id: link.id },
+      });
+
+      await ctx.answerCbQuery("Link removed!");
+      ctx.editMessageText(`✅ *Successfully removed:*\n${link.url}`, { parse_mode: "Markdown" });
+    } catch (error) {
+      logger.error(`Error deleting link via button: ${error.message}`);
+      ctx.answerCbQuery("Error removing link.", { show_alert: true });
+    }
+  });
+
+  bot.action("cancel_remove", (ctx) => {
+    ctx.answerCbQuery();
+    ctx.editMessageText("🚫 Removal canceled.");
   });
 
   const sendList = async (ctx) => {
@@ -193,7 +251,8 @@ export const setupCommands = (bot) => {
     const text = ctx.message.text.trim();
     const parts = text.split(" ");
     if (parts.length < 2) {
-      return ctx.reply("⚠️ Please provide a URL. Usage: `/remove <url>`", { parse_mode: "Markdown" });
+      // Show the interactive menu if no URL is provided
+      return handleRemoveMenu(ctx);
     }
 
     const url = parts[1];

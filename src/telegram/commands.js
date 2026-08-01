@@ -252,7 +252,7 @@ const generateControlPanel = async (linkId, userId) => {
     ]
   ]);
 
-  return { text: message, markup };
+  return { text: message, markup, photoUrl: link.photoUrl };
 };
 
 export const setupCommands = (bot) => {
@@ -296,10 +296,12 @@ export const setupCommands = (bot) => {
   bot.action("dashboard_folders", async (ctx) => {
     try {
       const { text, markup } = await generateDashboardFolders(ctx.dbUser.id);
+      try { await ctx.deleteMessage(); } catch(e){}
       if (!markup) {
-        return ctx.editMessageText(text, { parse_mode: "HTML" });
+        await ctx.reply(text, { parse_mode: "HTML" });
+      } else {
+        await ctx.reply(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
       }
-      ctx.editMessageText(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
       ctx.answerCbQuery();
     } catch (error) {
       logger.error(`Error in dashboard_folders: ${error.message}`);
@@ -312,7 +314,13 @@ export const setupCommands = (bot) => {
     const page = parseInt(ctx.match[2], 10);
     try {
       const { text, markup } = await generateDashboardList(ctx.dbUser.id, filter, page);
-      ctx.editMessageText(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      try {
+        await ctx.editMessageText(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      } catch (err) {
+        // Fallback if coming from a photo
+        try { await ctx.deleteMessage(); } catch(e){}
+        await ctx.reply(text, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      }
       ctx.answerCbQuery();
     } catch (error) {
       logger.error(`Error in list page: ${error.message}`);
@@ -322,13 +330,25 @@ export const setupCommands = (bot) => {
 
   bot.action(/^view_link_(.+)$/, async (ctx) => {
     const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
     try {
-      const panel = await generateControlPanel(linkId, ctx.dbUser.id);
+      const panel = await generateControlPanel(idInt, ctx.dbUser.id);
       if (!panel) {
         ctx.answerCbQuery("Link not found.");
-        return ctx.editMessageText("❌ <b>This link has been removed or does not exist.</b>", { parse_mode: "HTML" });
+        return ctx.reply("❌ <b>This link has been removed or does not exist.</b>", { parse_mode: "HTML" });
       }
-      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      
+      try { await ctx.deleteMessage(); } catch(e){}
+      
+      if (panel.photoUrl) {
+        try {
+          await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup });
+        } catch(imgErr) {
+          await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+        }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
       ctx.answerCbQuery();
     } catch (error) {
       logger.error(`Error in view_link: ${error.message}`);
@@ -380,7 +400,17 @@ export const setupCommands = (bot) => {
 
       // Re-generate the panel with updated data
       const panel = await generateControlPanel(linkId, ctx.dbUser.id);
-      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      try { await ctx.deleteMessage(); } catch(e){}
+      
+      if (panel.photoUrl) {
+        try {
+          await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup });
+        } catch (err) {
+          await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+        }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
       
     } catch (error) {
       logger.error(`Error in check_link: ${error.message}`);
@@ -420,7 +450,8 @@ export const setupCommands = (bot) => {
         ]
       ]);
 
-      ctx.editMessageText(message, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      try { await ctx.deleteMessage(); } catch(e){}
+      await ctx.reply(message, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
       ctx.answerCbQuery();
     } catch (error) {
       logger.error(`Error in history_link: ${error.message}`);
@@ -438,7 +469,13 @@ export const setupCommands = (bot) => {
       });
       await ctx.answerCbQuery("📦 Link Archived!");
       const panel = await generateControlPanel(idInt, ctx.dbUser.id);
-      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      try { await ctx.deleteMessage(); } catch(e){}
+      if (panel.photoUrl) {
+        try { await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup }); } 
+        catch (e) { await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup }); }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
     } catch (error) {
       ctx.answerCbQuery("Error archiving link.", { show_alert: true });
     }
@@ -454,7 +491,13 @@ export const setupCommands = (bot) => {
       });
       await ctx.answerCbQuery("♻️ Link Restored to Active tracking!");
       const panel = await generateControlPanel(idInt, ctx.dbUser.id);
-      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      try { await ctx.deleteMessage(); } catch(e){}
+      if (panel.photoUrl) {
+        try { await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup }); } 
+        catch (e) { await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup }); }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
     } catch (error) {
       ctx.answerCbQuery("Error restoring link.", { show_alert: true });
     }
@@ -483,7 +526,8 @@ export const setupCommands = (bot) => {
         [Markup.button.callback("🔙 Back to Folders", "dashboard_folders")]
       ]);
       
-      ctx.editMessageText(`✅ <b>Successfully removed:</b>\n${link.url}`, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
+      try { await ctx.deleteMessage(); } catch(e){}
+      await ctx.reply(`✅ <b>Successfully removed:</b>\n${link.url}`, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });
     } catch (error) {
       logger.error(`Error deleting link via button: ${error.message}`);
       ctx.answerCbQuery("Error removing link.", { show_alert: true });

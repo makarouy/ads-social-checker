@@ -953,21 +953,44 @@ export const setupCommands = (bot) => {
     }
   });
 
-  // Admin Broadcast Command
   bot.command("broadcast", async (ctx) => {
-    if (ctx.dbUser.role !== "ADMIN" && ctx.dbUser.role !== "SUPER_ADMIN") return;
+    if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     
-    const messageText = ctx.message.text.replace("/broadcast", "").trim();
-    if (!messageText) {
-      return ctx.reply("⚠️ Please provide a message to broadcast. Usage: <code>/broadcast Hello everyone!</code>", { parse_mode: "HTML" });
+    const rawText = ctx.message.text.replace("/broadcast", "").trim();
+    if (!rawText) {
+      return ctx.reply("⚠️ Usage:\n<code>/broadcast [Message]\n===\n[Button text] | [URL]</code>", { parse_mode: "HTML" });
+    }
+
+    let messageText = rawText;
+    let buttons = [];
+
+    if (rawText.includes("===")) {
+      const parts = rawText.split("===");
+      messageText = parts[0].trim();
+      const buttonLines = parts[1].trim().split("\n");
+      
+      buttonLines.forEach(line => {
+        const btnParts = line.split("|");
+        if (btnParts.length === 2) {
+          buttons.push([{ text: btnParts[0].trim(), url: btnParts[1].trim() }]);
+        }
+      });
     }
 
     try {
       const users = await prisma.user.findMany();
       let successCount = 0;
+      
+      const sendOptions = { parse_mode: "HTML", disable_web_page_preview: true };
+      if (buttons.length > 0) {
+        sendOptions.reply_markup = { inline_keyboard: buttons };
+      }
+
+      await ctx.reply(`⏳ <b>Broadcast started...</b> Sending to ${users.length} users.`, { parse_mode: "HTML" });
+
       for (const user of users) {
         try {
-          await ctx.telegram.sendMessage(user.telegramId, `📢 <b>ADMIN BROADCAST</b>\n\n${messageText}`, { parse_mode: "HTML" });
+          await ctx.telegram.sendMessage(user.telegramId, `📢 <b>ADMIN ANNOUNCEMENT</b>\n\n${messageText}`, sendOptions);
           successCount++;
         } catch (e) {
           logger.error(`Failed to broadcast to ${user.telegramId}: ${e.message}`);

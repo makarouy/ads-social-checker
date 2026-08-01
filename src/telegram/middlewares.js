@@ -49,8 +49,10 @@ export const registerUser = async (ctx, next) => {
     if (!user) {
       const userCount = await prisma.user.count();
       const role = userCount === 0 ? "SUPER_ADMIN" : "USER";
-      // First user gets admin, plus a 10-year license by default
-      const licenseExpiresAt = userCount === 0 ? new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) : null;
+      // First user gets admin (10 years). Regular users get 3 days free trial.
+      const licenseExpiresAt = userCount === 0 
+        ? new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) 
+        : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
       
       user = await prisma.user.create({
         data: {

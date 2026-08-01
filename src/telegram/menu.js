@@ -42,5 +42,6 @@ export const updateUserMenu = async (bot, telegramId, role) => {
     logger.info(`Updated Telegram menu for user ${telegramId} with role ${role}`);
   } catch (error) {
     logger.error(`Failed to update Telegram menu for ${telegramId}: ${error.message}`);
+    throw error;
   }
 };

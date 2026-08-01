@@ -619,13 +619,26 @@ export const setupCommands = (bot) => {
   bot.command("status", sendStatus);
 
   bot.command("start", async (ctx) => {
-    await updateUserMenu(bot, ctx.from.id, ctx.dbUser.role);
-    ctx.reply(
-      `<b>👋 Welcome to the Agency Tracker!</b>\n${DIVIDER}\n` +
-      `Your command menu has been updated based on your role (<b>${ctx.dbUser.role}</b>).\n\n` +
-      `Click the blue <b>Menu</b> button next to the chat box to see your available commands!`,
-      { parse_mode: "HTML", ...mainMenu }
-    );
+    try {
+      await updateUserMenu(bot, ctx.from.id, ctx.dbUser.role);
+      ctx.reply(
+        `<b>👋 Welcome to the Agency Tracker!</b>\n${DIVIDER}\n` +
+        `Your command menu has been updated based on your role (<b>${ctx.dbUser.role}</b>).\n\n` +
+        `Click the blue <b>Menu</b> button next to the chat box to see your available commands!`,
+        { parse_mode: "HTML", ...mainMenu }
+      );
+    } catch (e) {
+      ctx.reply(`Menu Error: ${e.message}`);
+    }
+  });
+
+  bot.command("syncmenu", async (ctx) => {
+    try {
+      await updateUserMenu(bot, ctx.from.id, ctx.dbUser.role);
+      ctx.reply(`✅ Sync successful for role: ${ctx.dbUser.role}`);
+    } catch (e) {
+      ctx.reply(`❌ Sync failed: ${e.message}`);
+    }
   });
 
   bot.command("help", (ctx) => {

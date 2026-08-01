@@ -37,7 +37,7 @@ const handleAddLink = async (ctx, text) => {
     }
 
     const waitMsg = await ctx.reply("🔍 <i>Analyzing URL... please wait.</i>", { parse_mode: "HTML" });
-    const { status: currentStatus, name, photoUrl } = await checkLinkStatus(platform, url);
+    const { status: currentStatus, name, photoUrl, followerCount } = await checkLinkStatus(platform, url);
 
     const newLink = await prisma.link.create({
       data: {
@@ -46,6 +46,7 @@ const handleAddLink = async (ctx, text) => {
         url,
         name,
         photoUrl,
+        followerCount,
         currentStatus,
         lastChecked: new Date(),
       },
@@ -54,6 +55,7 @@ const handleAddLink = async (ctx, text) => {
     let caption = `<b>✅ LINK ADDED SUCCESSFULLY</b>\n${DIVIDER}\n`;
     caption += `<b>Platform:</b> ${platform}\n`;
     if (name) caption += `<b>Name:</b> ${name}\n`;
+    if (followerCount) caption += `<b>Followers:</b> ${followerCount} 📈\n`;
     caption += `\n<b>Status:</b> ${getStatusEmoji(currentStatus)}\n`;
     caption += `${DIVIDER}\n`;
     caption += `<a href="${url}">🔗 View Profile</a>`;

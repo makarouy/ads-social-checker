@@ -26,13 +26,31 @@ export const checkFacebookStatus = async (url) => {
 
     let name = await page
       .locator('meta[property="og:title"]')
-      .getAttribute("content", { timeout: 2000 })
+      .getAttribute("content", { timeout: 5000 })
       .catch(() => null);
 
     let photoUrl = await page
       .locator('meta[property="og:image"]')
-      .getAttribute("content", { timeout: 2000 })
+      .getAttribute("content", { timeout: 5000 })
       .catch(() => null);
+
+    if (!photoUrl) {
+      // Fallback 1: SVG image (Facebook uses this for circular profile pics)
+      photoUrl = await page
+        .locator('svg[role="img"] image')
+        .first()
+        .getAttribute("xlink:href", { timeout: 2000 })
+        .catch(() => null);
+    }
+
+    if (!photoUrl) {
+      // Fallback 2: Any image with a profile-like URL
+      photoUrl = await page
+        .locator('img[src*="scontent"]')
+        .first()
+        .getAttribute("src", { timeout: 2000 })
+        .catch(() => null);
+    }
 
     if (name && name.endsWith(" | Facebook")) {
       name = name.replace(" | Facebook", "");

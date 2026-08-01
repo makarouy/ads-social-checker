@@ -731,7 +731,7 @@ export const setupCommands = (bot) => {
         await prisma.link.update({ where: { id: linkId }, data: { folderId } });
         return ctx.reply(`✅ Link assigned to folder <b>${folder.name}</b>`, { parse_mode: "HTML" });
       } catch (e) {
-        return ctx.reply("❌ Error assigning link.");
+        return ctx.reply(`❌ Error assigning link: ${e.message}`);
       }
     }
 

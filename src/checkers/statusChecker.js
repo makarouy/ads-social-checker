@@ -93,8 +93,12 @@ export const runGlobalCheck = async (bot) => {
         if (!link.isMuted) {
           const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
           let message = `<b>🔔 ALERT: STATUS CHANGE</b>\n${DIVIDER}\n`;
+          message += `<b>Platform:</b> ${link.platform}\n`;
           message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
-          message += `<b>Platform:</b> ${link.platform}\n\n`;
+          if (newFollowers || link.followerCount) {
+            message += `<b>Followers:</b> ${newFollowers || link.followerCount} 📈\n`;
+          }
+          message += `\n`;
           if (statusChanged) {
             message += `<b>Previous:</b> ${getStatusEmoji(link.currentStatus)}\n`;
             message += `<b>Current:</b> ${getStatusEmoji(newStatus)}\n`;

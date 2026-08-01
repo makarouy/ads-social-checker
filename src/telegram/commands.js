@@ -706,16 +706,21 @@ export const setupCommands = (bot) => {
     if (ctx.dbUser.role !== "SUPER_ADMIN") return;
     const parts = ctx.message.text.split(" ");
     const targetId = parseInt(parts[1], 10);
-    if (!targetId || isNaN(targetId)) return ctx.reply("⚠️ Usage: <code>/promote [UserID]</code>", { parse_mode: "HTML" });
+    if (!targetId || isNaN(targetId)) return ctx.reply("⚠️ Usage: <code>/promote [UserID] [Optional: SUPER_ADMIN]</code>\nExample: <code>/promote 2</code> or <code>/promote 2 SUPER_ADMIN</code>", { parse_mode: "HTML" });
+
+    let targetRole = "ADMIN";
+    if (parts[2] && parts[2].toUpperCase() === "SUPER_ADMIN") {
+      targetRole = "SUPER_ADMIN";
+    }
 
     try {
       await prisma.user.update({
         where: { id: targetId },
-        data: { role: "ADMIN", licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) }
+        data: { role: targetRole, licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) }
       });
       const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
-      await updateUserMenu(bot, parseInt(targetUser.telegramId, 10), "ADMIN");
-      ctx.reply(`✅ <b>Success!</b>\nUser #${targetId} is now an ADMIN.`, { parse_mode: "HTML" });
+      await updateUserMenu(bot, parseInt(targetUser.telegramId, 10), targetRole);
+      ctx.reply(`✅ <b>Success!</b>\nUser #${targetId} is now a(n) ${targetRole}.`, { parse_mode: "HTML" });
     } catch (e) {
       ctx.reply("❌ Error promoting user. Check if ID exists.");
     }

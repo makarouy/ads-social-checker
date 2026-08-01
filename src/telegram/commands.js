@@ -179,7 +179,9 @@ const generateDashboardList = async (userId, filter, page) => {
   });
 
   const buttons = links.map((link) => {
-    let label = `${getStatusEmoji(link.currentStatus).split(' ')[0]} [${link.platform}] `;
+    let label = `${getStatusEmoji(link.currentStatus).split(' ')[0]} `;
+    if (link.isMuted) label += "🔕 ";
+    label += `[${link.platform}] `;
     if (link.name) {
       label += link.name.length > 20 ? link.name.substring(0, 20) + "..." : link.name;
     } else {
@@ -248,10 +250,13 @@ const generateControlPanel = async (linkId, userId) => {
       Markup.button.callback("🔍 Check", `check_link_${link.id}`),
       Markup.button.callback("🕒 History", `history_link_${link.id}`)
     ],
-    actionRow,
     [
-      Markup.button.callback("🔙 Back to Folders", "dashboard_folders")
-    ]
+      link.isMuted
+        ? Markup.button.callback("🔔 Unmute Alerts", `unmute_link_${link.id}`)
+        : Markup.button.callback("🔕 Mute Alerts", `mute_link_${link.id}`)
+    ],
+    actionRow,
+    [Markup.button.callback("🔙 Back to Folders", "dashboard_folders")]
   ]);
 
   return { text: message, markup, photoUrl: link.photoUrl };
@@ -460,6 +465,50 @@ export const setupCommands = (bot) => {
     } catch (error) {
       logger.error(`Error in history_link: ${error.message}`);
       ctx.answerCbQuery("❌ Error fetching history.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^mute_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
+    try {
+      await prisma.link.updateMany({
+        where: { id: idInt, userId: ctx.dbUser.id },
+        data: { isMuted: true }
+      });
+      await ctx.answerCbQuery("🔕 Alerts Muted!");
+      const panel = await generateControlPanel(idInt, ctx.dbUser.id);
+      try { await ctx.deleteMessage(); } catch(e){}
+      if (panel.photoUrl) {
+        try { await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup }); } 
+        catch (e) { await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup }); }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
+    } catch (error) {
+      ctx.answerCbQuery("Error muting link.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^unmute_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
+    try {
+      await prisma.link.updateMany({
+        where: { id: idInt, userId: ctx.dbUser.id },
+        data: { isMuted: false }
+      });
+      await ctx.answerCbQuery("🔔 Alerts Unmuted!");
+      const panel = await generateControlPanel(idInt, ctx.dbUser.id);
+      try { await ctx.deleteMessage(); } catch(e){}
+      if (panel.photoUrl) {
+        try { await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup }); } 
+        catch (e) { await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup }); }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
+    } catch (error) {
+      ctx.answerCbQuery("Error unmuting link.", { show_alert: true });
     }
   });
 

@@ -89,51 +89,70 @@ export const runGlobalCheck = async (bot) => {
           },
         });
 
-        // Notify user
-        const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
-        let message = `<b>🔔 ALERT: STATUS CHANGE</b>\n${DIVIDER}\n`;
-        message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
-        message += `<b>Platform:</b> ${link.platform}\n\n`;
-        if (statusChanged) {
-          message += `<b>Previous:</b> ${getStatusEmoji(link.currentStatus)}\n`;
-          message += `<b>Current:</b> ${getStatusEmoji(newStatus)}\n`;
-        } else {
-          message += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n`;
-        }
-        if (photoChanged) message += `\n<b>Notice:</b> New Photo Detected! 📸\n`;
-        message += `\n<b>Time:</b> ${formatCambodiaTime(now)}\n`;
-        message += `${DIVIDER}\n`;
-        message += `<a href="${link.url}">🔗 View Profile</a>`;
-        
-        try {
-          if (photoChanged && newPhotoUrl) {
-            try {
-              await bot.telegram.sendPhoto(link.user.telegramId, newPhotoUrl, {
-                caption: message,
-                parse_mode: "HTML",
-              });
-            } catch (photoError) {
-              logger.error(`Global check: Failed to send photo: ${photoError.message}`);
-              await bot.telegram.sendMessage(link.user.telegramId, message, {
-                parse_mode: "HTML",
-                disable_web_page_preview: true
-              });
-            }
+        // Notify user if not muted
+        if (!link.isMuted) {
+          const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
+          let message = `<b>🔔 ALERT: STATUS CHANGE</b>\n${DIVIDER}\n`;
+          message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
+          message += `<b>Platform:</b> ${link.platform}\n\n`;
+          if (statusChanged) {
+            message += `<b>Previous:</b> ${getStatusEmoji(link.currentStatus)}\n`;
+            message += `<b>Current:</b> ${getStatusEmoji(newStatus)}\n`;
           } else {
-            await bot.telegram.sendMessage(link.user.telegramId, message, {
-              parse_mode: "HTML",
-              disable_web_page_preview: true
-            });
+            message += `<b>Status:</b> ${getStatusEmoji(newStatus)}\n`;
           }
+          if (photoChanged) message += `\n<b>Notice:</b> New Photo Detected! 📸\n`;
+          message += `\n<b>Time:</b> ${formatCambodiaTime(now)}\n`;
+          message += `${DIVIDER}\n`;
+          message += `<a href="${link.url}">🔗 View Profile</a>`;
           
-          await prisma.notification.create({
-            data: {
-              userId: link.userId,
-              message: message,
-            },
-          });
-        } catch (err) {
-          logger.error(`Failed to send Telegram notification to ${link.user.telegramId}: ${err.message}`);
+          try {
+            // Helper function to send message/photo to a specific ID
+            const sendAlertToId = async (targetId) => {
+              if (photoChanged && newPhotoUrl) {
+                try {
+                  await bot.telegram.sendPhoto(targetId, newPhotoUrl, {
+                    caption: message,
+                    parse_mode: "HTML",
+                  });
+                } catch (photoError) {
+                  logger.error(`Global check: Failed to send photo to ${targetId}: ${photoError.message}`);
+                  await bot.telegram.sendMessage(targetId, message, {
+                    parse_mode: "HTML",
+                    disable_web_page_preview: true
+                  });
+                }
+              } else {
+                await bot.telegram.sendMessage(targetId, message, {
+                  parse_mode: "HTML",
+                  disable_web_page_preview: true
+                });
+              }
+            };
+
+            // Send to the user who added it
+            await sendAlertToId(link.user.telegramId);
+
+            // Broadcast to Group Chat if configured
+            if (process.env.GROUP_CHAT_ID) {
+              try {
+                await sendAlertToId(process.env.GROUP_CHAT_ID);
+              } catch (groupErr) {
+                logger.error(`Failed to broadcast to GROUP_CHAT_ID: ${groupErr.message}`);
+              }
+            }
+            
+            await prisma.notification.create({
+              data: {
+                userId: link.userId,
+                message: message,
+              },
+            });
+          } catch (err) {
+            logger.error(`Failed to process Telegram notifications for ${link.user.telegramId}: ${err.message}`);
+          }
+        } else {
+          logger.info(`Skipped alert for ${link.url} because it is MUTED.`);
         }
       } else {
         // Just update lastChecked

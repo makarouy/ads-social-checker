@@ -1,9 +1,10 @@
 import axios from "axios";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { logger } from "../utils/logger.js";
 
 export const checkYouTubeStatus = async (url) => {
   try {
-    const response = await axios.get(url, {
+    const axiosConfig = {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
@@ -11,7 +12,13 @@ export const checkYouTubeStatus = async (url) => {
       },
       timeout: 10000,
       validateStatus: () => true,
-    });
+    };
+
+    if (process.env.PROXY_URL) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(process.env.PROXY_URL);
+    }
+
+    const response = await axios.get(url, axiosConfig);
 
     const { status, data } = response;
     const lowerData = typeof data === "string" ? data.toLowerCase() : "";

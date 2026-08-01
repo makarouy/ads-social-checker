@@ -4,10 +4,16 @@ import { logger } from "../utils/logger.js";
 export const checkFacebookStatus = async (url) => {
   let browser;
   try {
-    browser = await chromium.launch({
+    const launchArgs = {
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-    });
+    };
+
+    if (process.env.PROXY_URL) {
+      launchArgs.proxy = { server: process.env.PROXY_URL };
+    }
+
+    browser = await chromium.launch(launchArgs);
 
     const context = await browser.newContext({
       userAgent:

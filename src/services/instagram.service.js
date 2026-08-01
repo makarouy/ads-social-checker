@@ -1,9 +1,10 @@
 import axios from "axios";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { logger } from "../utils/logger.js";
 
 export const checkInstagramStatus = async (url) => {
   try {
-    const response = await axios.get(url, {
+    const axiosConfig = {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
@@ -11,7 +12,13 @@ export const checkInstagramStatus = async (url) => {
       },
       timeout: 10000,
       validateStatus: () => true,
-    });
+    };
+
+    if (process.env.PROXY_URL) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(process.env.PROXY_URL);
+    }
+
+    const response = await axios.get(url, axiosConfig);
 
     const { status, data } = response;
     const lowerData = typeof data === "string" ? data.toLowerCase() : "";

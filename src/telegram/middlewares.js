@@ -96,7 +96,22 @@ export const licenseGate = async (ctx, next) => {
     if (ctx.callbackQuery) {
       return ctx.answerCbQuery("🔒 Your license has expired.", { show_alert: true });
     }
-    return ctx.reply("🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)", { parse_mode: "HTML", reply_markup: { remove_keyboard: true } });
+    
+    // Dynamically fetch the SUPER_ADMIN to provide a support contact
+    let contactInfo = "";
+    try {
+      const superAdmin = await prisma.user.findFirst({
+        where: { role: "SUPER_ADMIN" },
+        orderBy: { id: 'asc' }
+      });
+      if (superAdmin && superAdmin.username) {
+        contactInfo = `\n\n💬 <b>Need a key?</b> Contact @${superAdmin.username} to purchase access.`;
+      }
+    } catch (e) {
+      // Ignore errors if DB fetch fails
+    }
+
+    return ctx.reply(`🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)${contactInfo}`, { parse_mode: "HTML", reply_markup: { remove_keyboard: true } });
   }
 
   return next();

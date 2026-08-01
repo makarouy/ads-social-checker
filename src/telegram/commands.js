@@ -39,7 +39,7 @@ const handleAddLink = async (ctx, text) => {
     const waitMsg = await ctx.reply("🔍 <i>Analyzing URL... please wait.</i>", { parse_mode: "HTML" });
     const { status: currentStatus, name, photoUrl } = await checkLinkStatus(platform, url);
 
-    await prisma.link.create({
+    const newLink = await prisma.link.create({
       data: {
         userId: ctx.dbUser.id,
         platform,
@@ -61,7 +61,8 @@ const handleAddLink = async (ctx, text) => {
     const replyMarkup = {
       reply_markup: {
         inline_keyboard: [
-          [{ text: getStatusEmoji(currentStatus), callback_data: "status_btn_ignore" }]
+          [{ text: getStatusEmoji(currentStatus), callback_data: "status_btn_ignore" }],
+          [{ text: "📁 Move to Folder", callback_data: `move_link_${newLink.id}` }]
         ]
       }
     };
@@ -730,7 +731,7 @@ export const setupCommands = (bot) => {
   bot.command("folder", async (ctx) => {
     const text = ctx.message.text.replace("/folder", "").trim();
     if (!text) {
-      return ctx.reply("⚠️ <b>Folder Commands:</b>\n\n<code>/folder list</code>\n<code>/folder create [Name]</code>\n<code>/folder delete [ID]</code>\n<code>/folder assign [LinkID] [FolderID]</code>\n<code>/folder unassign [LinkID]</code>", { parse_mode: "HTML" });
+      return ctx.reply("⚠️ <b>Folder Commands:</b>\n\n<code>/folder list</code>\n<code>/folder create [Name]</code>\n<code>/folder delete [ID]</code>", { parse_mode: "HTML" });
     }
 
     if (text === "list") {
@@ -765,37 +766,6 @@ export const setupCommands = (bot) => {
         return ctx.reply(`✅ Folder deleted. Links inside are now uncategorized.`);
       } catch (e) {
         return ctx.reply("❌ Error deleting folder.");
-      }
-    }
-
-    if (text.startsWith("assign")) {
-      const parts = text.split(" ");
-      const linkId = parseInt(parts[1], 10);
-      const folderId = parseInt(parts[2], 10);
-      if (!linkId || !folderId) return ctx.reply("⚠️ Usage: <code>/folder assign [LinkID] [FolderID]</code>", { parse_mode: "HTML" });
-      try {
-        const link = await prisma.link.findFirst({ where: { id: linkId, userId: ctx.dbUser.id } });
-        const folder = await prisma.folder.findFirst({ where: { id: folderId, userId: ctx.dbUser.id } });
-        if (!link) return ctx.reply("❌ Link not found.");
-        if (!folder) return ctx.reply("❌ Folder not found.");
-        await prisma.link.update({ where: { id: linkId }, data: { folderId } });
-        return ctx.reply(`✅ Link assigned to folder <b>${folder.name}</b>`, { parse_mode: "HTML" });
-      } catch (e) {
-        return ctx.reply(`❌ Error assigning link: ${e.message}`);
-      }
-    }
-
-    if (text.startsWith("unassign")) {
-      const parts = text.split(" ");
-      const linkId = parseInt(parts[1], 10);
-      if (!linkId) return ctx.reply("⚠️ Usage: <code>/folder unassign [LinkID]</code>", { parse_mode: "HTML" });
-      try {
-        const link = await prisma.link.findFirst({ where: { id: linkId, userId: ctx.dbUser.id } });
-        if (!link) return ctx.reply("❌ Link not found.");
-        await prisma.link.update({ where: { id: linkId }, data: { folderId: null } });
-        return ctx.reply(`✅ Link unassigned from folder.`);
-      } catch (e) {
-        return ctx.reply("❌ Error unassigning link.");
       }
     }
   });

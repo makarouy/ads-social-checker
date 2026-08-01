@@ -1,6 +1,9 @@
 import prisma from "../database/client.js";
 import { logger } from "../utils/logger.js";
 
+import bot from "../bot.js";
+import { updateUserMenu } from "./menu.js";
+
 // Rate limiting map (in-memory, simplified)
 const userRequests = new Map();
 
@@ -39,6 +42,7 @@ export const registerUser = async (ctx, next) => {
           licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000)
         }
       });
+      await updateUserMenu(bot, id, "SUPER_ADMIN");
       logger.info(`Upgraded legacy user ${id} to SUPER_ADMIN`);
     }
 
@@ -61,6 +65,7 @@ export const registerUser = async (ctx, next) => {
           },
         },
       });
+      await updateUserMenu(bot, id, role);
       logger.info(`New user registered: ${id} with role ${role}`);
     }
     

@@ -3,6 +3,7 @@ import { detectPlatform, checkLinkStatus } from "../checkers/statusChecker.js";
 import { getStatusEmoji, formatCambodiaTime } from "../utils/formatters.js";
 import { logger } from "../utils/logger.js";
 import { Markup } from "telegraf";
+import { updateUserMenu } from "./menu.js";
 
 const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
 
@@ -617,6 +618,16 @@ export const setupCommands = (bot) => {
   bot.hears('📊 Status', sendStatus);
   bot.command("status", sendStatus);
 
+  bot.command("start", async (ctx) => {
+    await updateUserMenu(bot, ctx.from.id, ctx.dbUser.role);
+    ctx.reply(
+      `<b>👋 Welcome to the Agency Tracker!</b>\n${DIVIDER}\n` +
+      `Your command menu has been updated based on your role (<b>${ctx.dbUser.role}</b>).\n\n` +
+      `Click the blue <b>Menu</b> button next to the chat box to see your available commands!`,
+      { parse_mode: "HTML", ...mainMenu }
+    );
+  });
+
   bot.command("help", (ctx) => {
     ctx.reply(
       `<b>🛠️ HOW TO USE</b>\n${DIVIDER}\n` +
@@ -689,6 +700,8 @@ export const setupCommands = (bot) => {
         where: { id: targetId },
         data: { role: "ADMIN", licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) }
       });
+      const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+      await updateUserMenu(bot, parseInt(targetUser.telegramId, 10), "ADMIN");
       ctx.reply(`✅ <b>Success!</b>\nUser #${targetId} is now an ADMIN.`, { parse_mode: "HTML" });
     } catch (e) {
       ctx.reply("❌ Error promoting user. Check if ID exists.");
@@ -706,6 +719,8 @@ export const setupCommands = (bot) => {
         where: { id: targetId },
         data: { role: "USER", licenseExpiresAt: new Date() } // instantly expire license
       });
+      const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+      await updateUserMenu(bot, parseInt(targetUser.telegramId, 10), "USER");
       ctx.reply(`✅ <b>Success!</b>\nUser #${targetId} has been demoted to USER and their license is expired.`, { parse_mode: "HTML" });
     } catch (e) {
       ctx.reply("❌ Error demoting user. Check if ID exists.");

@@ -132,10 +132,14 @@ const generateControlPanel = async (linkId, userId) => {
   message += `<a href="${link.url}">🔗 Open Profile</a>`;
 
   const markup = Markup.inlineKeyboard([
-    [Markup.button.callback("🔍 Force Check Now", `check_link_${link.id}`)],
-    [Markup.button.callback("🕒 View History", `history_link_${link.id}`)],
-    [Markup.button.callback("🗑️ Remove Link", `remove_link_${link.id}`)],
-    [Markup.button.callback("🔙 Back to List", "dashboard_list")]
+    [
+      Markup.button.callback("🔍 Check", `check_link_${link.id}`),
+      Markup.button.callback("🕒 History", `history_link_${link.id}`)
+    ],
+    [
+      Markup.button.callback("🗑️ Remove", `remove_link_${link.id}`),
+      Markup.button.callback("🔙 Back", "dashboard_list")
+    ]
   ]);
 
   return { text: message, markup };
@@ -287,8 +291,10 @@ export const setupCommands = (bot) => {
       message += `\n${DIVIDER}\n`;
 
       const markup = Markup.inlineKeyboard([
-        [Markup.button.callback("🔙 Back to Control Panel", `view_link_${link.id}`)],
-        [Markup.button.callback("📋 Back to Master List", "dashboard_list")]
+        [
+          Markup.button.callback("🔙 Panel", `view_link_${link.id}`),
+          Markup.button.callback("📋 List", "dashboard_list")
+        ]
       ]);
 
       ctx.editMessageText(message, { parse_mode: "HTML", disable_web_page_preview: true, ...markup });

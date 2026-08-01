@@ -8,10 +8,11 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
 COPY package.json package-lock.json* ./
 RUN npm install
+
+# Install Playwright Chromium browser and OS dependencies
+RUN npx playwright install --with-deps chromium
 
 COPY prisma ./prisma
 RUN npx prisma generate

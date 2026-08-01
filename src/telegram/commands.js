@@ -247,6 +247,7 @@ const generateControlPanel = async (linkId, userId) => {
   if (!link) return null;
 
   let message = `<b>⚙️ LINK CONTROL PANEL</b>\n${DIVIDER}\n`;
+  message += `<b>ID:</b> ${link.id}\n`;
   message += `<b>Platform:</b> ${link.platform}\n`;
   message += `<b>Account:</b> ${link.name || "N/A"}\n`;
   message += `<b>Followers:</b> ${link.followerCount || "Hidden / Anti-Bot"} 📈\n\n`;
@@ -277,6 +278,9 @@ const generateControlPanel = async (linkId, userId) => {
     [
       Markup.button.callback("🔍 Check", `check_link_${link.id}`),
       Markup.button.callback("🕒 History", `history_link_${link.id}`)
+    ],
+    [
+      Markup.button.callback("📁 Move to Folder", `move_link_${link.id}`)
     ],
     [
       link.isMuted
@@ -581,6 +585,52 @@ export const setupCommands = (bot) => {
       }
     } catch (error) {
       ctx.answerCbQuery("Error restoring link.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^move_link_(.+)$/, async (ctx) => {
+    const linkId = parseInt(ctx.match[1], 10);
+    try {
+      const folders = await prisma.folder.findMany({ where: { userId: ctx.dbUser.id }, orderBy: { id: 'asc' } });
+      
+      if (folders.length === 0) {
+        return ctx.answerCbQuery("You have no folders. Create one using /folder create [Name]", { show_alert: true });
+      }
+
+      const buttons = folders.map(f => [Markup.button.callback(`📁 ${f.name}`, `assign_link_${linkId}_${f.id}`)]);
+      buttons.push([Markup.button.callback("🗂️ Uncategorized (Remove)", `assign_link_${linkId}_null`)]);
+      buttons.push([Markup.button.callback("🔙 Cancel", `view_link_${linkId}`)]);
+
+      try { await ctx.deleteMessage(); } catch(e){}
+      await ctx.reply(`<b>📁 Select a Folder for this link:</b>`, { 
+        parse_mode: "HTML", 
+        reply_markup: { inline_keyboard: buttons } 
+      });
+      ctx.answerCbQuery();
+    } catch (error) {
+      ctx.answerCbQuery("Error loading folders.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^assign_link_(.+)_([^]+)$/, async (ctx) => {
+    const linkId = parseInt(ctx.match[1], 10);
+    const folderIdRaw = ctx.match[2];
+    
+    try {
+      const folderId = folderIdRaw === "null" ? null : parseInt(folderIdRaw, 10);
+      await prisma.link.update({ where: { id: linkId, userId: ctx.dbUser.id }, data: { folderId } });
+      await ctx.answerCbQuery("✅ Link moved successfully!");
+      
+      const panel = await generateControlPanel(linkId, ctx.dbUser.id);
+      try { await ctx.deleteMessage(); } catch(e){}
+      if (panel.photoUrl) {
+        try { await ctx.replyWithPhoto(panel.photoUrl, { caption: panel.text, parse_mode: "HTML", ...panel.markup }); }
+        catch (e) { await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup }); }
+      } else {
+        await ctx.reply(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+      }
+    } catch (e) {
+      ctx.answerCbQuery("❌ Error moving link.", { show_alert: true });
     }
   });
 

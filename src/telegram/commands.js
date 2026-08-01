@@ -1,7 +1,8 @@
 import prisma from "../database/client.js";
 import { detectPlatform, checkLinkStatus } from "../checkers/statusChecker.js";
-import { getStatusEmoji } from "../utils/formatters.js";
+import { getStatusEmoji, formatCambodiaTime } from "../utils/formatters.js";
 import { logger } from "../utils/logger.js";
+import { Markup } from "telegraf";
 
 const isValidUrl = (string) => {
   try {
@@ -61,7 +62,7 @@ const handleAddLink = async (ctx, text) => {
 
     try {
       await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id);
-    } catch (e) {} // Ignore if we can't delete the waiting message
+    } catch (e) {} 
 
     if (photoUrl) {
       try {
@@ -79,18 +80,91 @@ const handleAddLink = async (ctx, text) => {
   }
 };
 
+const mainMenu = Markup.keyboard([
+  ['📊 Status', '📋 My Links'],
+  ['➕ Add Link', '🗑️ Remove Link']
+]).resize();
+
 export const setupCommands = (bot) => {
   bot.command("start", (ctx) => {
     ctx.reply(
       "🌟 *Welcome to Ads Social Checker!* 🌟\n\n" +
         "I am your personal automated monitor. I keep an eye on social media profiles and instantly alert you the moment they go down or change.\n\n" +
-        "📊 *Supported Platforms:*\n" +
-        "• Facebook\n• Instagram\n• TikTok\n• YouTube\n\n" +
-        "💡 *How to use:*\n" +
-        "Simply paste a profile link directly into this chat to start monitoring it, or use `/help` to see all commands.",
-      { parse_mode: "Markdown" }
+        "Use the menu below to navigate! 👇",
+      { 
+        parse_mode: "Markdown",
+        ...mainMenu
+      }
     );
   });
+
+  bot.hears('➕ Add Link', (ctx) => {
+    ctx.reply("🔗 *How to add a link:*\n\nJust paste the Facebook, Instagram, TikTok, or YouTube URL directly into this chat!", {
+      parse_mode: "Markdown",
+      ...mainMenu
+    });
+  });
+
+  bot.hears('🗑️ Remove Link', (ctx) => {
+    ctx.reply("🗑️ *How to remove a link:*\n\nType `/remove <url>` to stop tracking a specific link.", {
+      parse_mode: "Markdown",
+      ...mainMenu
+    });
+  });
+
+  const sendList = async (ctx) => {
+    try {
+      const links = await prisma.link.findMany({
+        where: { userId: ctx.dbUser.id },
+      });
+
+      if (links.length === 0) {
+        return ctx.reply("📭 You are not tracking any links yet. Paste a link to get started!", mainMenu);
+      }
+
+      let message = "📋 *Your Monitored Links:*\n\n";
+      links.forEach((link, idx) => {
+        message += `*${idx + 1}.* [${link.platform}] ${link.url}\n`;
+      });
+
+      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true, ...mainMenu });
+    } catch (error) {
+      logger.error(`Error in list: ${error.message}`);
+      ctx.reply("❌ An error occurred while fetching your links.");
+    }
+  };
+
+  const sendStatus = async (ctx) => {
+    try {
+      const links = await prisma.link.findMany({
+        where: { userId: ctx.dbUser.id },
+      });
+
+      if (links.length === 0) {
+        return ctx.reply("📭 You are not tracking any links yet.", mainMenu);
+      }
+
+      let message = "📊 *Live Status Report:*\n\n";
+      links.forEach((link, idx) => {
+        const emoji = getStatusEmoji(link.currentStatus);
+        const namePart = link.name ? ` (${link.name})` : "";
+        message += `*${idx + 1}. ${link.platform}*${namePart}\n`;
+        message += `${emoji}\n`;
+        message += `🔗 [Link](${link.url})\n\n`;
+      });
+
+      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true, ...mainMenu });
+    } catch (error) {
+      logger.error(`Error in status: ${error.message}`);
+      ctx.reply("❌ An error occurred while fetching statuses.");
+    }
+  };
+
+  bot.hears('📋 My Links', sendList);
+  bot.command("list", sendList);
+
+  bot.hears('📊 Status', sendStatus);
+  bot.command("status", sendStatus);
 
   bot.command("help", (ctx) => {
     ctx.reply(
@@ -101,8 +175,8 @@ export const setupCommands = (bot) => {
         "🔹 /status - Check the live status of your links\n" +
         "🔹 /history `<url>` - View the status history of a link\n" +
         "🔹 /check `<url>` - Force a manual status check right now\n\n" +
-        "*(You can also just paste a URL directly without typing /add!)*",
-      { parse_mode: "Markdown" }
+        "*(You can also just use the menu buttons!)*",
+      { parse_mode: "Markdown", ...mainMenu }
     );
   });
 
@@ -140,54 +214,6 @@ export const setupCommands = (bot) => {
     } catch (error) {
       logger.error(`Error in /remove: ${error.message}`);
       ctx.reply("❌ An error occurred while removing the link.");
-    }
-  });
-
-  bot.command("list", async (ctx) => {
-    try {
-      const links = await prisma.link.findMany({
-        where: { userId: ctx.dbUser.id },
-      });
-
-      if (links.length === 0) {
-        return ctx.reply("📭 You are not tracking any links yet. Paste a link to get started!");
-      }
-
-      let message = "📋 *Your Monitored Links:*\n\n";
-      links.forEach((link, idx) => {
-        message += `*${idx + 1}.* [${link.platform}] ${link.url}\n`;
-      });
-
-      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
-    } catch (error) {
-      logger.error(`Error in /list: ${error.message}`);
-      ctx.reply("❌ An error occurred while fetching your links.");
-    }
-  });
-
-  bot.command("status", async (ctx) => {
-    try {
-      const links = await prisma.link.findMany({
-        where: { userId: ctx.dbUser.id },
-      });
-
-      if (links.length === 0) {
-        return ctx.reply("📭 You are not tracking any links yet.");
-      }
-
-      let message = "📊 *Live Status Report:*\n\n";
-      links.forEach((link, idx) => {
-        const emoji = getStatusEmoji(link.currentStatus);
-        const namePart = link.name ? ` (${link.name})` : "";
-        message += `*${idx + 1}. ${link.platform}*${namePart}\n`;
-        message += `${emoji}\n`;
-        message += `🔗 [Link](${link.url})\n\n`;
-      });
-
-      ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
-    } catch (error) {
-      logger.error(`Error in /status: ${error.message}`);
-      ctx.reply("❌ An error occurred while fetching statuses.");
     }
   });
 
@@ -241,6 +267,7 @@ export const setupCommands = (bot) => {
         if (statusChanged) message += `*Old Status:* ${getStatusEmoji(link.currentStatus)}\n*New Status:* ${getStatusEmoji(newStatus)}\n`;
         if (nameChanged) message += `*New Name:* ${newName}\n`;
         if (photoChanged) message += `*New Photo Detected!* 📸\n`;
+        message += `\n*Time:* ${formatCambodiaTime(now)}`;
 
         if (photoChanged && newPhotoUrl) {
           try {
@@ -260,6 +287,7 @@ export const setupCommands = (bot) => {
         
         let msg = `✅ *Status Unchanged*\n\n${getStatusEmoji(newStatus)}`;
         if (link.name) msg += `\n*Name:* ${link.name}`;
+        msg += `\n\n*Checked at:* ${formatCambodiaTime(now)}`;
         await ctx.reply(msg, { parse_mode: "Markdown" });
       }
     } catch (error) {
@@ -297,7 +325,7 @@ export const setupCommands = (bot) => {
 
       let message = `🕒 *History for:*\n[${link.platform}] ${link.url}\n\n`;
       link.histories.forEach((h) => {
-        message += `• ${getStatusEmoji(h.status)} - ${h.checkedAt.toISOString().replace('T', ' ').substring(0, 16)}\n`;
+        message += `• ${getStatusEmoji(h.status)} - ${formatCambodiaTime(h.checkedAt)}\n`;
       });
 
       ctx.reply(message, { parse_mode: "Markdown", disable_web_page_preview: true });
@@ -307,17 +335,21 @@ export const setupCommands = (bot) => {
     }
   });
 
-  // Catch-all for plain text messages
   bot.on("message", async (ctx, next) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
       return next();
     }
+    // Ignore menu commands in plain text handler
+    const menuCommands = ['📊 Status', '📋 My Links', '➕ Add Link', '🗑️ Remove Link'];
+    if (ctx.message && ctx.message.text && menuCommands.includes(ctx.message.text)) {
+      return next();
+    }
+    
     if (!ctx.message || !ctx.message.text) return next();
 
     const text = ctx.message.text.trim();
     if (isValidUrl(text)) {
       await handleAddLink(ctx, text);
     }
-    // Ignore non-URL text completely, preventing spam messages if user types random chat
   });
 };

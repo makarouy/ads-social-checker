@@ -590,6 +590,9 @@ export const setupCommands = (bot) => {
     }
     const menuCommands = ['📊 Status', '📋 My Links', '➕ Add Link'];
     if (ctx.message && ctx.message.text && menuCommands.includes(ctx.message.text)) {
+      if (ctx.message.text === '➕ Add Link') {
+        return ctx.reply("📝 <b>How to add a link:</b>\n\n1. Paste a full URL (e.g. <i>https://facebook.com/zuck</i>)\n2. Or just send a <b>Facebook UID</b> (e.g. <i>4</i> or <i>1000123456789</i>)", { parse_mode: "HTML" });
+      }
       return next();
     }
     
@@ -598,6 +601,10 @@ export const setupCommands = (bot) => {
     const text = ctx.message.text.trim();
     if (isValidUrl(text)) {
       await handleAddLink(ctx, text);
+    } else if (/^\d+$/.test(text)) {
+      // If the user sends just numbers, assume it's a Facebook UID
+      const fbUrl = `https://facebook.com/${text}`;
+      await handleAddLink(ctx, fbUrl);
     }
   });
 };

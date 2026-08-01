@@ -50,7 +50,7 @@ export const runGlobalCheck = async (bot) => {
       where: {
         isArchived: false
       },
-      include: { user: true, histories: true },
+      include: { user: true, histories: true, folder: true },
     });
 
     for (const link of links) {
@@ -93,6 +93,9 @@ export const runGlobalCheck = async (bot) => {
         if (!link.isMuted) {
           const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━";
           let message = `<b>🔔 ALERT: STATUS CHANGE</b>\n${DIVIDER}\n`;
+          if (link.folder) {
+            message += `<b>📁 Folder:</b> ${link.folder.name}\n`;
+          }
           message += `<b>Platform:</b> ${link.platform}\n`;
           message += `<b>Account:</b> ${newName || link.name || "N/A"}\n`;
           if (newFollowers || link.followerCount) {

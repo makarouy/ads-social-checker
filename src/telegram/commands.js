@@ -105,6 +105,30 @@ const generateDashboardFolders = async (userId) => {
     return { text: "📭 <b>You are not tracking any links yet.</b> Paste a link to get started!", markup: null };
   }
 
+  // Fetch Folders
+  const folders = await prisma.folder.findMany({ 
+    where: { userId }, 
+    orderBy: { id: 'asc' }, 
+    include: { _count: { select: { links: { where: { isArchived: false } } } } } 
+  });
+
+  const buttons = [];
+  
+  // Generate a button for each Folder
+  folders.forEach(folder => {
+    buttons.push([Markup.button.callback(`📁 ${folder.name} (${folder._count.links})`, `list_folder_${folder.id}_0`)]);
+  });
+
+  // Calculate uncategorized
+  const uncategorizedCount = await prisma.link.count({
+    where: { userId, folderId: null, isArchived: false }
+  });
+
+  if (uncategorizedCount > 0) {
+    buttons.push([Markup.button.callback(`🗂️ Uncategorized Links (${uncategorizedCount})`, `list_uncategorized_0`)]);
+  }
+
+  // Legacy buttons for dead, live, archived
   const liveCount = await prisma.link.count({
     where: { userId, currentStatus: 'LIVE', isArchived: false }
   });
@@ -115,21 +139,16 @@ const generateDashboardFolders = async (userId) => {
     where: { userId, isArchived: true }
   });
 
-  const buttons = [
-    [Markup.button.callback(`🗂️ All Active Links (${allCount})`, `list_all_0`)],
-    [Markup.button.callback(`🔴 Disabled / Dead (${deadCount})`, `list_dead_0`)],
-    [Markup.button.callback(`🟢 Live / Recovered (${liveCount})`, `list_live_0`)],
-    [Markup.button.callback(`📦 Archived Jobs (${archiveCount})`, `list_archived_0`)],
-    [
-      Markup.button.callback(`📘 FB`, `list_fb_0`),
-      Markup.button.callback(`📸 IG`, `list_ig_0`),
-      Markup.button.callback(`🎵 TikTok`, `list_tt_0`),
-      Markup.button.callback(`▶️ YouTube`, `list_yt_0`)
-    ]
-  ];
+  if (folders.length === 0 && uncategorizedCount === 0) {
+    buttons.push([Markup.button.callback(`🗂️ All Active Links (${allCount})`, `list_all_0`)]);
+  }
+
+  buttons.push([Markup.button.callback(`🔴 Disabled / Dead (${deadCount})`, `list_dead_0`)]);
+  buttons.push([Markup.button.callback(`🟢 Live / Recovered (${liveCount})`, `list_live_0`)]);
+  buttons.push([Markup.button.callback(`📦 Archived Jobs (${archiveCount})`, `list_archived_0`)]);
 
   return {
-    text: `<b>🗂️ MASTER DASHBOARD</b>\n${DIVIDER}\n<i>Select a category to view your links:</i>`,
+    text: `<b>🗂️ MASTER DASHBOARD</b>\n${DIVIDER}\n<i>Select a category to view your links:</i>\n\n💡 <b>Tip:</b> Use <code>/folder</code> to organize your links!`,
     markup: Markup.inlineKeyboard(buttons)
   };
 };
@@ -138,27 +157,35 @@ const generateDashboardList = async (userId, filter, page) => {
   let whereClause = { userId, isArchived: false };
   let title = "ACTIVE LINKS";
 
-  if (filter === "dead") {
+  if (filter.startsWith("folder_")) {
+    const folderId = parseInt(filter.split("_")[1], 10);
+    whereClause.folderId = folderId;
+    const folder = await prisma.folder.findFirst({ where: { id: folderId } });
+    title = folder ? `📁 ${folder.name.toUpperCase()}` : "📁 FOLDER";
+  } else if (filter === "uncategorized") {
+    whereClause.folderId = null;
+    title = "🗂️ UNCATEGORIZED LINKS";
+  } else if (filter === "dead") {
     whereClause.currentStatus = { in: ['DISABLED', 'DELETED', 'NOT_FOUND', 'UNKNOWN'] };
-    title = "DISABLED / DEAD ACCOUNTS";
+    title = "🔴 DISABLED / DEAD ACCOUNTS";
   } else if (filter === "live") {
     whereClause.currentStatus = 'LIVE';
-    title = "LIVE / RECOVERED ACCOUNTS";
+    title = "🟢 LIVE / RECOVERED ACCOUNTS";
   } else if (filter === "fb") {
     whereClause.platform = 'Facebook';
-    title = "FACEBOOK ACCOUNTS";
+    title = "📘 FACEBOOK ACCOUNTS";
   } else if (filter === "ig") {
     whereClause.platform = 'Instagram';
-    title = "INSTAGRAM ACCOUNTS";
+    title = "📸 INSTAGRAM ACCOUNTS";
   } else if (filter === "tt") {
     whereClause.platform = 'TikTok';
-    title = "TIKTOK ACCOUNTS";
+    title = "🎵 TIKTOK ACCOUNTS";
   } else if (filter === "yt") {
     whereClause.platform = 'YouTube';
-    title = "YOUTUBE ACCOUNTS";
+    title = "▶️ YOUTUBE ACCOUNTS";
   } else if (filter === "archived") {
     whereClause.isArchived = true;
-    title = "ARCHIVED JOBS";
+    title = "📦 ARCHIVED JOBS";
   }
 
   const pageSize = 10;
@@ -317,7 +344,7 @@ export const setupCommands = (bot) => {
     }
   });
 
-  bot.action(/^list_([a-z]+)_(\d+)$/, async (ctx) => {
+  bot.action(/^list_(.+)_(\d+)$/, async (ctx) => {
     const filter = ctx.match[1];
     const page = parseInt(ctx.match[2], 10);
     try {
@@ -648,6 +675,79 @@ export const setupCommands = (bot) => {
         "Use the buttons on your keyboard to navigate the dashboard. Tap <b>📋 My Links</b> to view, check, and manage your profiles.",
       { parse_mode: "HTML", ...mainMenu }
     );
+  });
+
+  bot.command("folder", async (ctx) => {
+    const text = ctx.message.text.replace("/folder", "").trim();
+    if (!text) {
+      return ctx.reply("⚠️ <b>Folder Commands:</b>\n\n<code>/folder list</code>\n<code>/folder create [Name]</code>\n<code>/folder delete [ID]</code>\n<code>/folder assign [LinkID] [FolderID]</code>\n<code>/folder unassign [LinkID]</code>", { parse_mode: "HTML" });
+    }
+
+    if (text === "list") {
+      const folders = await prisma.folder.findMany({ where: { userId: ctx.dbUser.id }, orderBy: { id: 'asc' }, include: { _count: { select: { links: true } } } });
+      if (folders.length === 0) return ctx.reply("You have no folders.");
+      let msg = `<b>📁 Your Folders</b>\n${DIVIDER}\n`;
+      folders.forEach(f => {
+        msg += `<b>ID:</b> ${f.id} | <b>Name:</b> ${f.name} (${f._count.links} links)\n`;
+      });
+      return ctx.reply(msg, { parse_mode: "HTML" });
+    }
+
+    if (text.startsWith("create")) {
+      const name = text.replace("create", "").trim();
+      if (!name) return ctx.reply("⚠️ Usage: <code>/folder create Client Nike</code>", { parse_mode: "HTML" });
+      try {
+        await prisma.folder.create({ data: { userId: ctx.dbUser.id, name } });
+        return ctx.reply(`✅ <b>Folder Created:</b> ${name}`, { parse_mode: "HTML" });
+      } catch (e) {
+        return ctx.reply("❌ Error creating folder.");
+      }
+    }
+
+    if (text.startsWith("delete")) {
+      const parts = text.split(" ");
+      const id = parseInt(parts[1], 10);
+      if (!id) return ctx.reply("⚠️ Usage: <code>/folder delete [ID]</code>", { parse_mode: "HTML" });
+      try {
+        const folder = await prisma.folder.findFirst({ where: { id, userId: ctx.dbUser.id } });
+        if (!folder) return ctx.reply("❌ Folder not found.");
+        await prisma.folder.delete({ where: { id } });
+        return ctx.reply(`✅ Folder deleted. Links inside are now uncategorized.`);
+      } catch (e) {
+        return ctx.reply("❌ Error deleting folder.");
+      }
+    }
+
+    if (text.startsWith("assign")) {
+      const parts = text.split(" ");
+      const linkId = parseInt(parts[1], 10);
+      const folderId = parseInt(parts[2], 10);
+      if (!linkId || !folderId) return ctx.reply("⚠️ Usage: <code>/folder assign [LinkID] [FolderID]</code>", { parse_mode: "HTML" });
+      try {
+        const link = await prisma.link.findFirst({ where: { id: linkId, userId: ctx.dbUser.id } });
+        const folder = await prisma.folder.findFirst({ where: { id: folderId, userId: ctx.dbUser.id } });
+        if (!link) return ctx.reply("❌ Link not found.");
+        if (!folder) return ctx.reply("❌ Folder not found.");
+        await prisma.link.update({ where: { id: linkId }, data: { folderId } });
+        return ctx.reply(`✅ Link assigned to folder <b>${folder.name}</b>`, { parse_mode: "HTML" });
+      } catch (e) {
+        return ctx.reply("❌ Error assigning link.");
+      }
+    }
+
+    if (text.startsWith("unassign")) {
+      const parts = text.split(" ");
+      const linkId = parseInt(parts[1], 10);
+      if (!linkId) return ctx.reply("⚠️ Usage: <code>/folder unassign [LinkID]</code>", { parse_mode: "HTML" });
+      try {
+        const link = await prisma.link.findFirst({ where: { id: linkId, userId: ctx.dbUser.id } });
+        if (!link) return ctx.reply("❌ Link not found.");
+        await prisma.link.update({ where: { id: linkId }, data: { folderId: null } });
+        return ctx.reply(`✅ Link unassigned from folder.`);
+      } catch (e) {
+        return ctx.reply("❌ Error unassigning link.");
+      }
+    }
   });
 
   // Legacy command fallbacks (point them to the interactive dashboard)

@@ -24,14 +24,26 @@ model User {
   updatedAt DateTime @updatedAt
 
   links         Link[]
+  folders       Folder[]
   notifications Notification[]
   settings      Setting?
   usedLicenseKeys LicenseKey[]
 }
 
+model Folder {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links     Link[]
+}
+
 model Link {
   id           Int      @id @default(autoincrement())
   userId       Int
+  folderId     Int?
   platform     String
   url          String
   name         String?
@@ -48,6 +60,7 @@ model Link {
   updatedAt    DateTime @updatedAt
 
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder       Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
   histories    History[]
 
   @@unique([userId, url])

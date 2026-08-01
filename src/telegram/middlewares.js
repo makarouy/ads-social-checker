@@ -110,7 +110,7 @@ export const licenseGate = async (ctx, next) => {
 
     // Fallback if the database is empty
     if (supportButtons.length === 0) {
-      supportButtons = [[{ text: "🛒 Contact Support to Buy Key", url: "https://t.me/adssupportz" }]];
+      supportButtons = [[{ text: "Contact Support", url: "https://t.me/adssupportz" }]];
     }
     
     // Dynamically fetch paywall text

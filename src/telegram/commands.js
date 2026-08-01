@@ -705,7 +705,7 @@ export const setupCommands = (bot) => {
       const contacts = await prisma.supportContact.findMany({ orderBy: { id: 'asc' } });
       let supportButtons = contacts.map(c => [{ text: c.name, url: c.url }]);
       if (supportButtons.length === 0) {
-        supportButtons = [[{ text: "🛒 Contact Support", url: "https://t.me/adssupportz" }]];
+        supportButtons = [[{ text: "Contact Support", url: "https://t.me/adssupportz" }]];
       }
       ctx.reply("💬 <b>Need help?</b> Contact our support team below:", { 
         parse_mode: "HTML", 

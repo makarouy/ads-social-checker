@@ -288,4 +288,69 @@ export const setupCommands = (bot) => {
       ctx.reply("An error occurred while fetching history.");
     }
   });
+  bot.on("message", async (ctx, next) => {
+    if (ctx.message && ctx.message.text && ctx.message.text.startsWith("/")) {
+      return next();
+    }
+    if (!ctx.message || !ctx.message.text) return next();
+
+    const text = ctx.message.text.trim();
+    if (isValidUrl(text)) {
+      const url = text;
+      const platform = detectPlatform(url);
+      if (!platform) {
+        return ctx.reply("Unsupported platform. Supported: Facebook, Instagram, TikTok, YouTube.");
+      }
+
+      try {
+        const existingLink = await prisma.link.findFirst({
+          where: { userId: ctx.dbUser.id, url: url },
+        });
+
+        if (existingLink) {
+          return ctx.reply("You are already tracking this link.");
+        }
+
+        ctx.reply("Checking URL status before adding...");
+        const { status: currentStatus, name, photoUrl } = await checkLinkStatus(platform, url);
+
+        await prisma.link.create({
+          data: {
+            userId: ctx.dbUser.id,
+            platform,
+            url,
+            name,
+            photoUrl,
+            currentStatus,
+            lastChecked: new Date(),
+          },
+        });
+
+        let caption = `Link added successfully.\nPlatform: ${platform}`;
+        if (name) caption += `\nName: ${name}`;
+
+        const replyMarkup = {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: `Current Status: ${currentStatus}`, callback_data: "status_btn_ignore" }]
+            ]
+          }
+        };
+
+        if (photoUrl) {
+          try {
+            await ctx.replyWithPhoto(photoUrl, { caption, ...replyMarkup });
+          } catch (photoError) {
+            logger.error(`Failed to send photo: ${photoError.message}`);
+            await ctx.reply(caption, replyMarkup);
+          }
+        } else {
+          await ctx.reply(caption, replyMarkup);
+        }
+      } catch (error) {
+        logger.error(`Error in auto-add: ${error.message}`);
+        await ctx.reply("An error occurred while adding the link.");
+      }
+    }
+  });
 };

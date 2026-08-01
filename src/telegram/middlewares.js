@@ -97,21 +97,17 @@ export const licenseGate = async (ctx, next) => {
       return ctx.answerCbQuery("🔒 Your license has expired.", { show_alert: true });
     }
     
-    // Dynamically fetch the SUPER_ADMIN to provide a support contact
-    let contactInfo = "";
-    try {
-      const superAdmin = await prisma.user.findFirst({
-        where: { role: "SUPER_ADMIN" },
-        orderBy: { id: 'asc' }
-      });
-      if (superAdmin && superAdmin.username) {
-        contactInfo = `\n\n💬 <b>Need a key?</b> Contact @${superAdmin.username} to purchase access.`;
+    return ctx.reply(
+      `🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)\n\n💬 <b>Need a key?</b> Contact our support team below to purchase access.`, 
+      { 
+        parse_mode: "HTML", 
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🛒 Contact Support to Buy Key", url: "https://t.me/adssupportz" }]
+          ]
+        }
       }
-    } catch (e) {
-      // Ignore errors if DB fetch fails
-    }
-
-    return ctx.reply(`🔒 <b>Your license has expired.</b>\n\nPlease enter a valid License Key to continue using the bot. (e.g. AGENCY-XYZ123)${contactInfo}`, { parse_mode: "HTML", reply_markup: { remove_keyboard: true } });
+    );
   }
 
   return next();

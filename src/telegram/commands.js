@@ -661,6 +661,57 @@ export const setupCommands = (bot) => {
     }
   });
 
+  // Admin Management Commands
+  bot.command("users", async (ctx) => {
+    if (ctx.dbUser.role !== "ADMIN") return;
+    try {
+      const users = await prisma.user.findMany({ orderBy: { id: 'asc' } });
+      let msg = `<b>👥 DATABASE USERS</b>\n${DIVIDER}\n`;
+      users.forEach(u => {
+        msg += `<b>ID:</b> ${u.id} | <b>Role:</b> ${u.role}\n`;
+        msg += `<b>Name:</b> ${u.firstName || ''} ${u.lastName || ''} (@${u.username || 'none'})\n`;
+        msg += `<b>License:</b> ${u.licenseExpiresAt ? new Date(u.licenseExpiresAt).toLocaleDateString() : 'Expired'}\n\n`;
+      });
+      ctx.reply(msg, { parse_mode: "HTML" });
+    } catch (e) {
+      ctx.reply("❌ Error fetching users.");
+    }
+  });
+
+  bot.command("promote", async (ctx) => {
+    if (ctx.dbUser.role !== "ADMIN") return;
+    const parts = ctx.message.text.split(" ");
+    const targetId = parseInt(parts[1], 10);
+    if (!targetId || isNaN(targetId)) return ctx.reply("⚠️ Usage: <code>/promote [UserID]</code>", { parse_mode: "HTML" });
+
+    try {
+      await prisma.user.update({
+        where: { id: targetId },
+        data: { role: "ADMIN", licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) }
+      });
+      ctx.reply(`✅ <b>Success!</b>\nUser #${targetId} is now an ADMIN.`, { parse_mode: "HTML" });
+    } catch (e) {
+      ctx.reply("❌ Error promoting user. Check if ID exists.");
+    }
+  });
+
+  bot.command("demote", async (ctx) => {
+    if (ctx.dbUser.role !== "ADMIN") return;
+    const parts = ctx.message.text.split(" ");
+    const targetId = parseInt(parts[1], 10);
+    if (!targetId || isNaN(targetId)) return ctx.reply("⚠️ Usage: <code>/demote [UserID]</code>", { parse_mode: "HTML" });
+
+    try {
+      await prisma.user.update({
+        where: { id: targetId },
+        data: { role: "USER", licenseExpiresAt: new Date() } // instantly expire license
+      });
+      ctx.reply(`✅ <b>Success!</b>\nUser #${targetId} has been demoted to USER and their license is expired.`, { parse_mode: "HTML" });
+    } catch (e) {
+      ctx.reply("❌ Error demoting user. Check if ID exists.");
+    }
+  });
+
   // Admin Broadcast Command
   bot.command("broadcast", async (ctx) => {
     if (ctx.dbUser.role !== "ADMIN") return;

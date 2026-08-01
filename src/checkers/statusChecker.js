@@ -2,6 +2,7 @@ import { checkFacebookStatus } from "../services/facebook.service.js";
 import { checkInstagramStatus } from "../services/instagram.service.js";
 import { checkTikTokStatus } from "../services/tiktok.service.js";
 import { checkYouTubeStatus } from "../services/youtube.service.js";
+import { getStatusEmoji } from "../utils/formatters.js";
 import { logger } from "../utils/logger.js";
 import prisma from "../database/client.js";
 
@@ -84,8 +85,8 @@ export const runGlobalCheck = async (bot) => {
         });
 
         // Notify user
-        let message = `🚨 *Update Detected*\n\n*Platform:* ${link.platform}\n*URL:* ${link.url}\n`;
-        if (statusChanged) message += `*Old Status:* ${link.currentStatus}\n*New Status:* ${newStatus}\n`;
+        let message = `🚨 *Automated Alert: Update Detected*\n\n*Platform:* ${link.platform}\n*URL:* ${link.url}\n`;
+        if (statusChanged) message += `*Old Status:* ${getStatusEmoji(link.currentStatus)}\n*New Status:* ${getStatusEmoji(newStatus)}\n`;
         if (nameChanged) message += `*Name updated:* ${newName}\n`;
         if (photoChanged) message += `*New Photo Detected!* 📸\n`;
         message += `\n*Time:* ${now.toISOString().replace('T', ' ').substring(0, 16)}`;

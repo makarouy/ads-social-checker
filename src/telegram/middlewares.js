@@ -30,6 +30,18 @@ export const registerUser = async (ctx, next) => {
       where: { telegramId: id.toString() },
     });
 
+    if (user && user.role !== "ADMIN" && user.id === 1) {
+      // Upgrade the first legacy user to ADMIN
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { 
+          role: "ADMIN",
+          licenseExpiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000)
+        }
+      });
+      logger.info(`Upgraded legacy user ${id} to ADMIN`);
+    }
+
     if (!user) {
       const userCount = await prisma.user.count();
       const role = userCount === 0 ? "ADMIN" : "USER";

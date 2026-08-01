@@ -218,7 +218,11 @@ const generateControlPanel = async (linkId, userId) => {
 
   let message = `<b>⚙️ LINK CONTROL PANEL</b>\n${DIVIDER}\n`;
   message += `<b>Platform:</b> ${link.platform}\n`;
-  message += `<b>Account:</b> ${link.name || "N/A"}\n\n`;
+  message += `<b>Account:</b> ${link.name || "N/A"}\n`;
+  if (link.followerCount) {
+    message += `<b>Followers:</b> ${link.followerCount} 📈\n`;
+  }
+  message += `\n`;
   if (link.isArchived) {
     message += `<b>Status:</b> 📦 ARCHIVED\n`;
   } else {
@@ -371,14 +375,15 @@ export const setupCommands = (bot) => {
 
       await ctx.answerCbQuery("🔍 Running manual check... Please wait.");
       
-      const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
+      const { status: newStatus, name: newName, photoUrl: newPhotoUrl, followerCount: newFollowers } = await checkLinkStatus(link.platform, link.url);
       const now = new Date();
 
       let statusChanged = newStatus !== link.currentStatus && newStatus !== "UNKNOWN";
       let nameChanged = newName && newName !== link.name;
       let photoChanged = newPhotoUrl && newPhotoUrl !== link.photoUrl;
+      let followersChanged = newFollowers && newFollowers !== link.followerCount;
 
-      if (statusChanged || nameChanged || photoChanged) {
+      if (statusChanged || nameChanged || photoChanged || followersChanged) {
         if (statusChanged) {
           await prisma.history.create({ data: { linkId: link.id, status: newStatus } });
         }
@@ -388,6 +393,7 @@ export const setupCommands = (bot) => {
             ...(statusChanged && { lastStatus: link.currentStatus, currentStatus: newStatus, lastChanged: now }),
             ...(nameChanged && { name: newName }),
             ...(photoChanged && { photoUrl: newPhotoUrl }),
+            ...(followersChanged && { followerCount: newFollowers }),
             lastChecked: now,
           },
         });

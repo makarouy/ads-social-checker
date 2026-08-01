@@ -33,6 +33,7 @@ model Link {
   name         String?
   photoUrl     String?
   username     String?
+  followerCount String?
   currentStatus String   @default("UNKNOWN")
   lastStatus   String?
   lastChecked  DateTime?

@@ -21,22 +21,39 @@ export const checkTikTokStatus = async (url) => {
         lowerData.includes("couldn't find this account") ||
         lowerData.includes("not found")
       ) {
-        return "NOT_FOUND";
+        return { status: "NOT_FOUND", followerCount: null };
       }
-      return "LIVE";
+
+      let followerCount = null;
+      // Try meta description: "X Followers, Y Following, Z Likes"
+      const match = data.match(/([\d,MK.]+)\s+Followers/i);
+      if (match && match[1]) {
+        followerCount = match[1];
+      } else {
+        // Fallback: search for followerCount in JSON data
+        const jsonMatch = data.match(/"followerCount":\s*(\d+)/);
+        if (jsonMatch && jsonMatch[1]) {
+          let num = parseInt(jsonMatch[1], 10);
+          if (num >= 1000000) followerCount = (num / 1000000).toFixed(1) + "M";
+          else if (num >= 1000) followerCount = (num / 1000).toFixed(1) + "K";
+          else followerCount = num.toString();
+        }
+      }
+
+      return { status: "LIVE", followerCount };
     }
 
     if (status === 404) {
-      return "NOT_FOUND";
+      return { status: "NOT_FOUND", followerCount: null };
     }
 
     if (status === 429) {
-      return "RATE_LIMITED";
+      return { status: "RATE_LIMITED", followerCount: null };
     }
 
-    return "UNKNOWN";
+    return { status: "UNKNOWN", followerCount: null };
   } catch (error) {
     logger.error(`TikTok check error for ${url}: ${error.message}`);
-    return "UNKNOWN";
+    return { status: "UNKNOWN", followerCount: null };
   }
 };

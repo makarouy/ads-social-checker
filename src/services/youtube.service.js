@@ -21,32 +21,40 @@ export const checkYouTubeStatus = async (url) => {
         lowerData.includes("this video is private") ||
         lowerData.includes("private video")
       ) {
-        return "PRIVATE";
+        return { status: "PRIVATE", followerCount: null };
       }
       if (
         lowerData.includes("this video is unavailable") ||
         lowerData.includes("this video has been removed") ||
         lowerData.includes("this channel does not exist")
       ) {
-        return "NOT_FOUND";
+        return { status: "NOT_FOUND", followerCount: null };
       }
       if (lowerData.includes("this account has been suspended")) {
-        return "SUSPENDED";
+        return { status: "SUSPENDED", followerCount: null };
       }
-      return "LIVE";
+
+      let followerCount = null;
+      // Search for "1.2M subscribers" in the page source
+      const match = data.match(/([\d,MK.]+)\s+subscribers/i);
+      if (match && match[1]) {
+        followerCount = match[1];
+      }
+
+      return { status: "LIVE", followerCount };
     }
 
     if (status === 404) {
-      return "NOT_FOUND";
+      return { status: "NOT_FOUND", followerCount: null };
     }
 
     if (status === 429) {
-      return "RATE_LIMITED";
+      return { status: "RATE_LIMITED", followerCount: null };
     }
 
-    return "UNKNOWN";
+    return { status: "UNKNOWN", followerCount: null };
   } catch (error) {
     logger.error(`YouTube check error for ${url}: ${error.message}`);
-    return "UNKNOWN";
+    return { status: "UNKNOWN", followerCount: null };
   }
 };

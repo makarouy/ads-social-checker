@@ -18,25 +18,33 @@ export const checkInstagramStatus = async (url) => {
 
     if (status === 200) {
       if (lowerData.includes("login") && !lowerData.includes("profile picture")) {
-        return "LOGIN_REQUIRED";
+        return { status: "LOGIN_REQUIRED", followerCount: null };
       }
       if (lowerData.includes("page not found") || lowerData.includes("sorry, this page isn't available")) {
-        return "NOT_FOUND";
+        return { status: "NOT_FOUND", followerCount: null };
       }
-      return "LIVE";
+
+      let followerCount = null;
+      // Instagram meta description usually looks like: "1.2M Followers, 100 Following, 500 Posts..."
+      const match = data.match(/([\d,MK.]+)\s+Followers/i);
+      if (match && match[1]) {
+        followerCount = match[1];
+      }
+
+      return { status: "LIVE", followerCount };
     }
 
     if (status === 404) {
-      return "NOT_FOUND";
+      return { status: "NOT_FOUND", followerCount: null };
     }
 
     if (status === 429) {
-      return "RATE_LIMITED";
+      return { status: "RATE_LIMITED", followerCount: null };
     }
 
-    return "UNKNOWN";
+    return { status: "UNKNOWN", followerCount: null };
   } catch (error) {
     logger.error(`Instagram check error for ${url}: ${error.message}`);
-    return "UNKNOWN";
+    return { status: "UNKNOWN", followerCount: null };
   }
 };

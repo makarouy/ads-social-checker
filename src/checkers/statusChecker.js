@@ -38,7 +38,7 @@ export const checkLinkStatus = async (platform, url) => {
   }
   
   if (typeof result === "string") {
-    return { status: result, name: null, photoUrl: null };
+    return { status: result, name: null, photoUrl: null, followerCount: null };
   }
   return result;
 };
@@ -54,16 +54,17 @@ export const runGlobalCheck = async (bot) => {
     });
 
     for (const link of links) {
-      const { status: newStatus, name: newName, photoUrl: newPhotoUrl } = await checkLinkStatus(link.platform, link.url);
+      const { status: newStatus, name: newName, photoUrl: newPhotoUrl, followerCount: newFollowers } = await checkLinkStatus(link.platform, link.url);
       const now = new Date();
 
       let statusChanged = newStatus !== link.currentStatus && newStatus !== "UNKNOWN";
       let nameChanged = newName && newName !== link.name;
       let photoChanged = newPhotoUrl && newPhotoUrl !== link.photoUrl;
+      let followersChanged = newFollowers && newFollowers !== link.followerCount;
 
-      if (statusChanged || nameChanged || photoChanged) {
+      if (statusChanged || nameChanged || photoChanged || followersChanged) {
         logger.info(
-          `Updates detected for ${link.url}: Status(${link.currentStatus}->${newStatus}), Name(${link.name}->${newName})`
+          `Updates detected for ${link.url}: Status(${link.currentStatus}->${newStatus})`
         );
 
         if (statusChanged) {
@@ -83,6 +84,7 @@ export const runGlobalCheck = async (bot) => {
             ...(statusChanged && { lastStatus: link.currentStatus, currentStatus: newStatus, lastChanged: now }),
             ...(nameChanged && { name: newName }),
             ...(photoChanged && { photoUrl: newPhotoUrl }),
+            ...(followersChanged && { followerCount: newFollowers }),
             lastChecked: now,
           },
         });

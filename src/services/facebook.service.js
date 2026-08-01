@@ -56,54 +56,62 @@ export const checkFacebookStatus = async (url) => {
       name = name.replace(" | Facebook", "");
     }
 
+    let followerCount = null;
+    let description = await page
+      .locator('meta[name="description"]')
+      .getAttribute("content", { timeout: 2000 })
+      .catch(() => null);
+    
+    if (description) {
+      const match = description.match(/([\d,MK.]+)\s+followers/i) || description.match(/([\d,MK.]+)\s+likes/i);
+      if (match && match[1]) {
+        followerCount = match[1];
+      }
+    }
+
     if (status === 200 || status === 304 || status === 302 || status === 301) {
       if (
         lowerData.includes("you must log in to continue") ||
         lowerData.includes("login_required")
       ) {
-        return { status: "LOGIN_REQUIRED", name: null, photoUrl: null };
+        return { status: "LOGIN_REQUIRED", name: null, photoUrl: null, followerCount: null };
       }
       if (
         lowerData.includes("this content isn't available right now") ||
         lowerData.includes("page not found") ||
         lowerData.includes("doesn't exist")
       ) {
-        return { status: "NOT_FOUND", name, photoUrl };
+        return { status: "NOT_FOUND", name, photoUrl, followerCount: null };
       }
 
       // If Facebook shows a generic login wall, the title is usually "Log in or sign up"
       if (name && (name.includes("Log In") || name.includes("Log in"))) {
-        return { status: "LOGIN_REQUIRED", name: null, photoUrl: null };
+        return { status: "LOGIN_REQUIRED", name: null, photoUrl: null, followerCount: null };
       }
 
-      // If we got the photo and name, we bypass UNKNOWN even if status was weird
-      if (photoUrl && name) {
-        return { status: "LIVE", name, photoUrl };
-      }
-
-      return { status: "LIVE", name, photoUrl };
+      return { status: "LIVE", name, photoUrl, followerCount };
     }
 
     if (status === 404) {
-      return { status: "NOT_FOUND", name, photoUrl };
+      return { status: "NOT_FOUND", name, photoUrl, followerCount: null };
     }
 
     if (status === 429) {
-      return { status: "RATE_LIMITED", name, photoUrl };
+      return { status: "RATE_LIMITED", name, photoUrl, followerCount: null };
     }
 
     // Sometimes Facebook returns 403 (Forbidden) to cloud servers even via Playwright,
     // but the page still loads a CAPTCHA or a login redirect.
     // If we managed to get a photoUrl, it's actually live.
     if (photoUrl && name && !name.includes("Log In")) {
-      return { status: "LIVE", name, photoUrl };
+      return { status: "LIVE", name, photoUrl, followerCount };
     }
 
     logger.warn(`Unexpected Facebook status for ${url}: ${status}`);
-    return { status: "UNKNOWN", name, photoUrl };
+    return { status: "UNKNOWN", name, photoUrl, followerCount: null };
   } catch (error) {
     logger.error(`Facebook Playwright check error for ${url}: ${error.message}`);
-    return { status: "UNKNOWN", name: null, photoUrl: null };
+    return { status: "UNKNOWN", name: null, photoUrl: null, followerCount: null };
   } finally {
     if (browser) {
       await browser.close().catch(() => {});

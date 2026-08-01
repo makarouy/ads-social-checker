@@ -116,8 +116,9 @@ const generateDashboardList = async (userId) => {
 };
 
 const generateControlPanel = async (linkId, userId) => {
+  const idInt = parseInt(linkId, 10);
   const link = await prisma.link.findFirst({
-    where: { id: linkId, userId: userId },
+    where: { id: idInt, userId: userId },
   });
 
   if (!link) return null;
@@ -210,9 +211,10 @@ export const setupCommands = (bot) => {
 
   bot.action(/^check_link_(.+)$/, async (ctx) => {
     const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
     try {
       const link = await prisma.link.findFirst({
-        where: { id: linkId, userId: ctx.dbUser.id },
+        where: { id: idInt, userId: ctx.dbUser.id },
       });
 
       if (!link) {
@@ -261,9 +263,10 @@ export const setupCommands = (bot) => {
 
   bot.action(/^history_link_(.+)$/, async (ctx) => {
     const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
     try {
       const link = await prisma.link.findFirst({
-        where: { id: linkId, userId: ctx.dbUser.id },
+        where: { id: idInt, userId: ctx.dbUser.id },
         include: { histories: { orderBy: { checkedAt: 'desc' }, take: 10 } }
       });
 
@@ -298,9 +301,10 @@ export const setupCommands = (bot) => {
 
   bot.action(/^remove_link_(.+)$/, async (ctx) => {
     const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
     try {
       const link = await prisma.link.findFirst({
-        where: { id: linkId, userId: ctx.dbUser.id },
+        where: { id: idInt, userId: ctx.dbUser.id },
       });
 
       if (!link) {

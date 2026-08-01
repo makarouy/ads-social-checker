@@ -37,6 +37,7 @@ model Link {
   lastStatus   String?
   lastChecked  DateTime?
   lastChanged  DateTime?
+  isArchived   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -47,6 +47,9 @@ export const runGlobalCheck = async (bot) => {
   logger.info("Starting global status check...");
   try {
     const links = await prisma.link.findMany({
+      where: {
+        isArchived: false
+      },
       include: { user: true, histories: true },
     });
 

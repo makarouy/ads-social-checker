@@ -91,28 +91,37 @@ const mainMenu = Markup.keyboard([
 ]).resize();
 
 const generateDashboardFolders = async (userId) => {
-  const allCount = await prisma.link.count({ where: { userId } });
+  const allCount = await prisma.link.count({ where: { userId, isArchived: false } });
   
   if (allCount === 0) {
+    const archiveCount = await prisma.link.count({ where: { userId, isArchived: true } });
+    if (archiveCount > 0) {
+      return {
+        text: `📭 <b>You have no active links.</b>\nBut you have ${archiveCount} archived jobs.`,
+        markup: Markup.inlineKeyboard([[Markup.button.callback(`📦 View Archives (${archiveCount})`, `list_archived_0`)]])
+      };
+    }
     return { text: "📭 <b>You are not tracking any links yet.</b> Paste a link to get started!", markup: null };
   }
 
   const liveCount = await prisma.link.count({
-    where: { userId, currentStatus: 'LIVE' }
+    where: { userId, currentStatus: 'LIVE', isArchived: false }
   });
   const deadCount = await prisma.link.count({
-    where: { userId, currentStatus: { in: ['DISABLED', 'DELETED', 'NOT_FOUND', 'UNKNOWN'] } }
+    where: { userId, currentStatus: { in: ['DISABLED', 'DELETED', 'NOT_FOUND', 'UNKNOWN'] }, isArchived: false }
+  });
+  const archiveCount = await prisma.link.count({
+    where: { userId, isArchived: true }
   });
 
   const buttons = [
-    [Markup.button.callback(`🗂️ All Links (${allCount})`, `list_all_0`)],
+    [Markup.button.callback(`🗂️ All Active Links (${allCount})`, `list_all_0`)],
     [Markup.button.callback(`🔴 Disabled / Dead (${deadCount})`, `list_dead_0`)],
     [Markup.button.callback(`🟢 Live / Recovered (${liveCount})`, `list_live_0`)],
+    [Markup.button.callback(`📦 Archived Jobs (${archiveCount})`, `list_archived_0`)],
     [
       Markup.button.callback(`📘 FB`, `list_fb_0`),
-      Markup.button.callback(`📸 IG`, `list_ig_0`)
-    ],
-    [
+      Markup.button.callback(`📸 IG`, `list_ig_0`),
       Markup.button.callback(`🎵 TikTok`, `list_tt_0`),
       Markup.button.callback(`▶️ YouTube`, `list_yt_0`)
     ]
@@ -125,8 +134,8 @@ const generateDashboardFolders = async (userId) => {
 };
 
 const generateDashboardList = async (userId, filter, page) => {
-  let whereClause = { userId };
-  let title = "ALL LINKS";
+  let whereClause = { userId, isArchived: false };
+  let title = "ACTIVE LINKS";
 
   if (filter === "dead") {
     whereClause.currentStatus = { in: ['DISABLED', 'DELETED', 'NOT_FOUND', 'UNKNOWN'] };
@@ -146,6 +155,9 @@ const generateDashboardList = async (userId, filter, page) => {
   } else if (filter === "yt") {
     whereClause.platform = 'YouTube';
     title = "YOUTUBE ACCOUNTS";
+  } else if (filter === "archived") {
+    whereClause.isArchived = true;
+    title = "ARCHIVED JOBS";
   }
 
   const pageSize = 10;
@@ -207,19 +219,36 @@ const generateControlPanel = async (linkId, userId) => {
   let message = `<b>⚙️ LINK CONTROL PANEL</b>\n${DIVIDER}\n`;
   message += `<b>Platform:</b> ${link.platform}\n`;
   message += `<b>Account:</b> ${link.name || "N/A"}\n\n`;
-  message += `<b>Status:</b> ${getStatusEmoji(link.currentStatus)}\n`;
-  message += `<b>Last Checked:</b> ${formatCambodiaTime(link.lastChecked)}\n`;
+  if (link.isArchived) {
+    message += `<b>Status:</b> 📦 ARCHIVED\n`;
+  } else {
+    message += `<b>Status:</b> ${getStatusEmoji(link.currentStatus)}\n`;
+    message += `<b>Last Checked:</b> ${formatCambodiaTime(link.lastChecked)}\n`;
+  }
   message += `${DIVIDER}\n`;
   message += `<a href="${link.url}">🔗 Open Profile</a>`;
+
+  let actionRow = [];
+  if (link.isArchived) {
+    actionRow = [
+      Markup.button.callback("♻️ Restore (Unarchive)", `restore_link_${link.id}`),
+      Markup.button.callback("🗑️ Delete", `remove_link_${link.id}`)
+    ];
+  } else {
+    actionRow = [
+      Markup.button.callback("📦 Archive", `archive_link_${link.id}`),
+      Markup.button.callback("🗑️ Delete", `remove_link_${link.id}`)
+    ];
+  }
 
   const markup = Markup.inlineKeyboard([
     [
       Markup.button.callback("🔍 Check", `check_link_${link.id}`),
       Markup.button.callback("🕒 History", `history_link_${link.id}`)
     ],
+    actionRow,
     [
-      Markup.button.callback("🗑️ Remove", `remove_link_${link.id}`),
-      Markup.button.callback("🔙 Back", "dashboard_folders")
+      Markup.button.callback("🔙 Back to Folders", "dashboard_folders")
     ]
   ]);
 
@@ -396,6 +425,38 @@ export const setupCommands = (bot) => {
     } catch (error) {
       logger.error(`Error in history_link: ${error.message}`);
       ctx.answerCbQuery("❌ Error fetching history.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^archive_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
+    try {
+      await prisma.link.updateMany({
+        where: { id: idInt, userId: ctx.dbUser.id },
+        data: { isArchived: true }
+      });
+      await ctx.answerCbQuery("📦 Link Archived!");
+      const panel = await generateControlPanel(idInt, ctx.dbUser.id);
+      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+    } catch (error) {
+      ctx.answerCbQuery("Error archiving link.", { show_alert: true });
+    }
+  });
+
+  bot.action(/^restore_link_(.+)$/, async (ctx) => {
+    const linkId = ctx.match[1];
+    const idInt = parseInt(linkId, 10);
+    try {
+      await prisma.link.updateMany({
+        where: { id: idInt, userId: ctx.dbUser.id },
+        data: { isArchived: false, lastChecked: new Date() } // reset checked time so it gets checked soon
+      });
+      await ctx.answerCbQuery("♻️ Link Restored to Active tracking!");
+      const panel = await generateControlPanel(idInt, ctx.dbUser.id);
+      ctx.editMessageText(panel.text, { parse_mode: "HTML", disable_web_page_preview: true, ...panel.markup });
+    } catch (error) {
+      ctx.answerCbQuery("Error restoring link.", { show_alert: true });
     }
   });
 

@@ -989,9 +989,16 @@ export const setupCommands = (bot) => {
       const buttonLines = parts[1].trim().split("\n");
       
       buttonLines.forEach(line => {
-        const btnParts = line.split("|");
-        if (btnParts.length === 2) {
-          buttons.push([{ text: btnParts[0].trim(), url: btnParts[1].trim() }]);
+        if (!line.trim()) return;
+        const btnParts = line.split("|").map(s => s.trim());
+        let row = [];
+        for (let i = 0; i < btnParts.length; i += 2) {
+          if (btnParts[i] && btnParts[i+1]) {
+            row.push({ text: btnParts[i], url: btnParts[i+1] });
+          }
+        }
+        if (row.length > 0) {
+          buttons.push(row);
         }
       });
     }

@@ -102,6 +102,11 @@ export const checkFacebookStatus = async (url) => {
         return { status: "LOGIN_REQUIRED", name: null, photoUrl: null, followerCount: null };
       }
 
+      // If the page has no name, or just "Facebook", it is a dead/suspended page
+      if (!name || name.trim() === "Facebook" || name.trim() === "") {
+        return { status: "NOT_FOUND", name: null, photoUrl: null, followerCount: null };
+      }
+
       return { status: "LIVE", name, photoUrl, followerCount };
     }
 
